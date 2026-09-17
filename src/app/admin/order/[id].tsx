@@ -395,7 +395,7 @@ export default function AdminOrderDetailPage() {
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={["top", "bottom"]}
+      edges={[ "bottom"]}
     >
       <ScrollView
         contentContainerStyle={styles.container}

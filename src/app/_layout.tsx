@@ -1,10 +1,10 @@
 import * as Notifications from "expo-notifications";
 import {
-    DarkTheme,
-    DefaultTheme,
-    Stack,
-    ThemeProvider,
-    router,
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider,
+  router,
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -68,24 +68,36 @@ function useNotificationObserver() {
        */
 
       if (typeof data?.order_id === "string" && data.order_id.length > 0) {
-        console.log("Opening mobile order:", data.order_id);
+        const isAdminNotification =
+          typeof data?.type === "string" && data.type.startsWith("admin_");
 
-        /*
-         * Small delay allows Expo Router to finish
-         * mounting the navigation tree when the app
-         * was launched by the notification.
-         */
+        console.log(
+          isAdminNotification
+            ? "Opening admin order:"
+            : "Opening mobile order:",
+          data.order_id,
+        );
+
         setTimeout(() => {
           if (!mounted) {
             return;
           }
 
-          router.push({
-            pathname: "/orders/[id]",
-            params: {
-              id: data.order_id as string,
-            },
-          });
+          if (isAdminNotification) {
+            router.push({
+              pathname: "/admin/order/[id]",
+              params: {
+                id: data.order_id as string,
+              },
+            });
+          } else {
+            router.push({
+              pathname: "/orders/[id]",
+              params: {
+                id: data.order_id as string,
+              },
+            });
+          }
         }, 300);
 
         return;
@@ -189,21 +201,15 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
 
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShown: true,
-            header: () => <SiteHeader />,
-          }}
-        />
+      <Stack
+        screenOptions={{
+          headerShown: true,
+          header: () => <SiteHeader />,
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
 
-        <Stack.Screen
-          name="product/[id]"
-          options={{
-            headerShown: false,
-          }}
-        />
+        <Stack.Screen name="product/[id]" />
       </Stack>
     </ThemeProvider>
   );

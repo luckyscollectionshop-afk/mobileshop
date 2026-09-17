@@ -155,9 +155,7 @@ export default function EditCategoryScreen() {
 
       Alert.alert(
         "Category",
-        error instanceof Error
-          ? error.message
-          : "Failed to load category.",
+        error instanceof Error ? error.message : "Failed to load category.",
         [
           {
             text: "OK",
@@ -174,10 +172,7 @@ export default function EditCategoryScreen() {
   // CLOUDINARY DELETE
   // -------------------------------------------------------
 
-  async function deleteCloudinaryImage(
-    url: string,
-    accessToken: string,
-  ) {
+  async function deleteCloudinaryImage(url: string, accessToken: string) {
     const response = await fetch(
       `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/admin/cloudinary/delete`,
       {
@@ -195,9 +190,7 @@ export default function EditCategoryScreen() {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(
-        data?.error ?? "Failed to delete image from Cloudinary.",
-      );
+      throw new Error(data?.error ?? "Failed to delete image from Cloudinary.");
     }
 
     return data;
@@ -249,17 +242,11 @@ export default function EditCategoryScreen() {
 
       setUploading(true);
 
-      const fileName =
-        asset.fileName ?? `category-${Date.now()}.jpg`;
+      const fileName = asset.fileName ?? `category-${Date.now()}.jpg`;
 
       const mimeType = asset.mimeType ?? "image/jpeg";
 
-      console.log(
-        "Uploading category image:",
-        fileName,
-        mimeType,
-        asset.uri,
-      );
+      console.log("Uploading category image:", fileName, mimeType, asset.uri);
 
       // ---------------------------------------------------
       // Expo 57:
@@ -287,15 +274,11 @@ export default function EditCategoryScreen() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data?.error ?? "Category image upload failed.",
-        );
+        throw new Error(data?.error ?? "Category image upload failed.");
       }
 
       if (!data?.url) {
-        throw new Error(
-          "Cloudinary did not return an image URL.",
-        );
+        throw new Error("Cloudinary did not return an image URL.");
       }
 
       // ---------------------------------------------------
@@ -422,10 +405,7 @@ export default function EditCategoryScreen() {
                 "The category image has been deleted from Cloudinary and removed from the category.",
               );
             } catch (error) {
-              console.error(
-                "Category image deletion error:",
-                error,
-              );
+              console.error("Category image deletion error:", error);
 
               Alert.alert(
                 "Remove failed",
@@ -455,18 +435,12 @@ export default function EditCategoryScreen() {
     const trimmedSlug = slug.trim();
 
     if (!trimmedName) {
-      Alert.alert(
-        "Category",
-        "Please enter a category name.",
-      );
+      Alert.alert("Category", "Please enter a category name.");
       return;
     }
 
     if (!trimmedSlug) {
-      Alert.alert(
-        "Category",
-        "Please enter a category slug.",
-      );
+      Alert.alert("Category", "Please enter a category slug.");
       return;
     }
 
@@ -489,19 +463,14 @@ export default function EditCategoryScreen() {
         .maybeSingle();
 
       if (profile?.role !== "admin") {
-        throw new Error(
-          "Only administrators can update categories.",
-        );
+        throw new Error("Only administrators can update categories.");
       }
 
       // ---------------------------------------------------
       // CHECK DUPLICATE CATEGORY NAME
       // ---------------------------------------------------
 
-      const {
-        data: existingName,
-        error: nameError,
-      } = await supabase
+      const { data: existingName, error: nameError } = await supabase
         .from("categories")
         .select("id")
         .ilike("name", trimmedName)
@@ -513,19 +482,14 @@ export default function EditCategoryScreen() {
       }
 
       if (existingName) {
-        throw new Error(
-          "A category with this name already exists.",
-        );
+        throw new Error("A category with this name already exists.");
       }
 
       // ---------------------------------------------------
       // CHECK DUPLICATE SLUG
       // ---------------------------------------------------
 
-      const {
-        data: existingSlug,
-        error: slugError,
-      } = await supabase
+      const { data: existingSlug, error: slugError } = await supabase
         .from("categories")
         .select("id")
         .eq("slug", trimmedSlug)
@@ -537,9 +501,7 @@ export default function EditCategoryScreen() {
       }
 
       if (existingSlug) {
-        throw new Error(
-          "A category with this slug already exists.",
-        );
+        throw new Error("A category with this slug already exists.");
       }
 
       const newSortOrder = Number(sortOrder);
@@ -554,9 +516,7 @@ export default function EditCategoryScreen() {
           name: trimmedName,
           slug: trimmedSlug,
           description: description.trim() || null,
-          sort_order: Number.isFinite(newSortOrder)
-            ? newSortOrder
-            : 0,
+          sort_order: Number.isFinite(newSortOrder) ? newSortOrder : 0,
           is_active: isActive,
           image_url: imageUrl,
           image_public_id: imagePublicId,
@@ -577,10 +537,7 @@ export default function EditCategoryScreen() {
       // After DB update succeeds, delete abc.jpg.
       // ---------------------------------------------------
 
-      if (
-        category.image_url &&
-        category.image_url !== imageUrl
-      ) {
+      if (category.image_url && category.image_url !== imageUrl) {
         try {
           const {
             data: { session },
@@ -620,9 +577,7 @@ export default function EditCategoryScreen() {
 
       Alert.alert(
         "Save failed",
-        error instanceof Error
-          ? error.message
-          : "Failed to update category.",
+        error instanceof Error ? error.message : "Failed to update category.",
       );
     } finally {
       setSaving(false);
@@ -677,10 +632,7 @@ export default function EditCategoryScreen() {
       // CHECK WHETHER PRODUCTS USE THIS CATEGORY
       // ---------------------------------------------------
 
-      const {
-        count,
-        error: linksError,
-      } = await supabase
+      const { count, error: linksError } = await supabase
         .from("product_categories")
         .select("product_id", {
           count: "exact",
@@ -709,10 +661,7 @@ export default function EditCategoryScreen() {
       // ---------------------------------------------------
 
       if (category.image_url) {
-        await deleteCloudinaryImage(
-          category.image_url,
-          session.access_token,
-        );
+        await deleteCloudinaryImage(category.image_url, session.access_token);
       }
 
       // ---------------------------------------------------
@@ -728,26 +677,20 @@ export default function EditCategoryScreen() {
         throw deleteError;
       }
 
-      Alert.alert(
-        "Category deleted",
-        `"${category.name}" has been deleted.`,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              router.replace("/admin/categories");
-            },
+      Alert.alert("Category deleted", `"${category.name}" has been deleted.`, [
+        {
+          text: "OK",
+          onPress: () => {
+            router.replace("/admin/categories");
           },
-        ],
-      );
+        },
+      ]);
     } catch (error) {
       console.error("Delete category error:", error);
 
       Alert.alert(
         "Delete failed",
-        error instanceof Error
-          ? error.message
-          : "Failed to delete category.",
+        error instanceof Error ? error.message : "Failed to delete category.",
       );
     } finally {
       setDeleting(false);
@@ -762,14 +705,9 @@ export default function EditCategoryScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator
-            size="large"
-            color={STORE.colors.primary}
-          />
+          <ActivityIndicator size="large" color={STORE.colors.primary} />
 
-          <Text style={styles.loadingText}>
-            Loading category...
-          </Text>
+          <Text style={styles.loadingText}>Loading category...</Text>
         </View>
       </SafeAreaView>
     );
@@ -783,19 +721,13 @@ export default function EditCategoryScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>
-            Category not found.
-          </Text>
+          <Text style={styles.errorText}>Category not found.</Text>
 
           <Pressable
             style={styles.backButtonLarge}
-            onPress={() =>
-              router.replace("/admin/categories")
-            }
+            onPress={() => router.replace("/admin/categories")}
           >
-            <Text style={styles.backButtonLargeText}>
-              Back to Categories
-            </Text>
+            <Text style={styles.backButtonLargeText}>Back to Categories</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -807,10 +739,7 @@ export default function EditCategoryScreen() {
   // -------------------------------------------------------
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={["top", "bottom"]}
-    >
+    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -820,19 +749,13 @@ export default function EditCategoryScreen() {
 
         <View style={styles.header}>
           <Pressable
-            onPress={() =>
-              router.replace("/admin/categories")
-            }
+            onPress={() => router.replace("/admin/categories")}
             style={styles.backButton}
           >
-            <Text style={styles.backText}>
-              ‹ Categories
-            </Text>
+            <Text style={styles.backText}>‹ Categories</Text>
           </Pressable>
 
-          <Text style={styles.title}>
-            Edit Category
-          </Text>
+          <Text style={styles.title}>Edit Category</Text>
 
           <Text style={styles.subtitle}>
             Update category details and shop appearance.
@@ -857,9 +780,7 @@ export default function EditCategoryScreen() {
             autoCapitalize="none"
           />
 
-          <Text style={styles.helper}>
-            Used in the category URL.
-          </Text>
+          <Text style={styles.helper}>Used in the category URL.</Text>
 
           <Field
             label="Description"
@@ -877,9 +798,7 @@ export default function EditCategoryScreen() {
             keyboardType="number-pad"
           />
 
-          <Text style={styles.helper}>
-            Lower numbers appear first.
-          </Text>
+          <Text style={styles.helper}>Lower numbers appear first.</Text>
         </Section>
 
         {/* STATUS */}
@@ -906,75 +825,57 @@ export default function EditCategoryScreen() {
             </View>
           ) : (
             <View style={styles.noImage}>
-              <Text style={styles.noImageText}>
-                No category image
-              </Text>
+              <Text style={styles.noImageText}>No category image</Text>
             </View>
           )}
 
           <View style={styles.imageButtons}>
             <Pressable
-  style={styles.secondaryButton}
-  onPress={pickAndUploadImage}
-  disabled={
-    uploading ||
-    saving ||
-    deleting ||
-    deletingImage ||
-    !!imagePreview
-  }
->
-  {uploading ? (
-    <ActivityIndicator
-      color={STORE.colors.primary}
-      size="small"
-    />
-  ) : (
-    <Text
-      style={[
-        styles.secondaryButtonText,
-        imagePreview && { color: "#aaa49a" },
-      ]}
-    >
-      Choose Image
-    </Text>
-  )}
-</Pressable>
+              style={styles.secondaryButton}
+              onPress={pickAndUploadImage}
+              disabled={
+                uploading ||
+                saving ||
+                deleting ||
+                deletingImage ||
+                !!imagePreview
+              }
+            >
+              {uploading ? (
+                <ActivityIndicator color={STORE.colors.primary} size="small" />
+              ) : (
+                <Text
+                  style={[
+                    styles.secondaryButtonText,
+                    imagePreview && { color: "#aaa49a" },
+                  ]}
+                >
+                  Choose Image
+                </Text>
+              )}
+            </Pressable>
 
             {imagePreview ? (
               <Pressable
                 style={styles.removeImageButton}
                 onPress={removeImage}
-                disabled={
-                  uploading ||
-                  saving ||
-                  deleting ||
-                  deletingImage
-                }
+                disabled={uploading || saving || deleting || deletingImage}
               >
                 {deletingImage ? (
-                  <ActivityIndicator
-                    color="#b42318"
-                    size="small"
-                  />
+                  <ActivityIndicator color="#b42318" size="small" />
                 ) : (
-                  <Text style={styles.removeImageText}>
-                    Remove
-                  </Text>
+                  <Text style={styles.removeImageText}>Remove</Text>
                 )}
               </Pressable>
             ) : null}
           </View>
 
           <Text style={styles.helper}>
-            Choose an image from your phone. It will be
-            uploaded securely to Cloudinary.
+            Choose an image Max 4.5 MB.
           </Text>
 
           {imageFile ? (
-            <Text style={styles.uploadedText}>
-              New image uploaded ✓
-            </Text>
+            <Text style={styles.uploadedText}>New image uploaded ✓</Text>
           ) : null}
         </Section>
 
@@ -984,56 +885,33 @@ export default function EditCategoryScreen() {
           <Pressable
             style={styles.deleteButton}
             onPress={confirmDelete}
-            disabled={
-              deleting ||
-              saving ||
-              uploading ||
-              deletingImage
-            }
+            disabled={deleting || saving || uploading || deletingImage}
           >
             {deleting ? (
               <ActivityIndicator color="#b42318" />
             ) : (
-              <Text style={styles.deleteButtonText}>
-                Delete Category
-              </Text>
+              <Text style={styles.deleteButtonText}>Delete Category</Text>
             )}
           </Pressable>
 
           <View style={styles.bottomButtons}>
             <Pressable
               style={styles.cancelButton}
-              onPress={() =>
-                router.replace("/admin/categories")
-              }
-              disabled={
-                saving ||
-                deleting ||
-                uploading ||
-                deletingImage
-              }
+              onPress={() => router.replace("/admin/categories")}
+              disabled={saving || deleting || uploading || deletingImage}
             >
-              <Text style={styles.cancelText}>
-                Cancel
-              </Text>
+              <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
 
             <Pressable
               style={styles.saveButton}
               onPress={saveCategory}
-              disabled={
-                saving ||
-                deleting ||
-                uploading ||
-                deletingImage
-              }
+              disabled={saving || deleting || uploading || deletingImage}
             >
               {saving ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <Text style={styles.saveText}>
-                  Save Changes
-                </Text>
+                <Text style={styles.saveText}>Save Changes</Text>
               )}
             </Pressable>
           </View>
@@ -1056,13 +934,9 @@ function Section({
 }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        {title}
-      </Text>
+      <Text style={styles.sectionTitle}>{title}</Text>
 
-      <View style={styles.card}>
-        {children}
-      </View>
+      <View style={styles.card}>{children}</View>
     </View>
   );
 }
@@ -1081,17 +955,12 @@ function Field({
   onChangeText: (value: string) => void;
   placeholder?: string;
   multiline?: boolean;
-  keyboardType?:
-    | "default"
-    | "decimal-pad"
-    | "number-pad";
+  keyboardType?: "default" | "decimal-pad" | "number-pad";
   autoCapitalize?: "none" | "sentences";
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>
-        {label}
-      </Text>
+      <Text style={styles.label}>{label}</Text>
 
       <TextInput
         value={value}
@@ -1101,10 +970,7 @@ function Field({
         multiline={multiline}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
-        style={[
-          styles.input,
-          multiline && styles.textarea,
-        ]}
+        style={[styles.input, multiline && styles.textarea]}
       />
     </View>
   );
@@ -1124,13 +990,9 @@ function DisplaySwitch({
   return (
     <View style={styles.switchRow}>
       <View style={styles.switchText}>
-        <Text style={styles.switchLabel}>
-          {label}
-        </Text>
+        <Text style={styles.switchLabel}>{label}</Text>
 
-        <Text style={styles.switchDescription}>
-          {description}
-        </Text>
+        <Text style={styles.switchDescription}>{description}</Text>
       </View>
 
       <Switch
@@ -1343,6 +1205,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginTop: 12,
+    marginBottom: 10,
   },
 
   secondaryButton: {

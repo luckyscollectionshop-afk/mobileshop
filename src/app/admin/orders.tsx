@@ -147,7 +147,7 @@ export default function AdminOrdersPage() {
     return (
       <SafeAreaView
         style={styles.safeArea}
-        edges={["top", "bottom"]}
+        edges={[ "bottom"]}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" />
@@ -167,7 +167,7 @@ export default function AdminOrdersPage() {
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
     >
       <ScrollView
         contentContainerStyle={styles.container}
@@ -184,16 +184,9 @@ export default function AdminOrdersPage() {
            ===================================================== */}
 
         <View style={styles.header}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Text style={styles.backText}>
-              ← Admin
-            </Text>
-          </Pressable>
+          
 
-          <Text style={styles.title}>Orders</Text>
+          <Text style={styles.title}>Admin Orders</Text>
 
           <Text style={styles.subtitle}>
             Manage customer orders and payments.
@@ -358,6 +351,7 @@ const styles = StyleSheet.create({
 
   container: {
     padding: 20,
+    paddingTop: 0,
     paddingBottom: 40,
   },
 
@@ -374,12 +368,12 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
 
   backButton: {
     alignSelf: "flex-start",
-    marginBottom: 18,
+    marginBottom: 0,
   },
 
   backText: {

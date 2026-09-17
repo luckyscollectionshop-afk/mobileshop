@@ -412,7 +412,7 @@ const arrowScale = arrowAnimation.interpolate({
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={styles.container}
@@ -573,7 +573,7 @@ const arrowScale = arrowAnimation.interpolate({
                           style={styles.productCard}
                           key={product.id}
                           onPress={() => {
-                            console.log("Home product pressed:", product.id);
+                            //console.log("Home product pressed:", product.id);
 
                             router.push({
                               pathname: "/product/[id]",

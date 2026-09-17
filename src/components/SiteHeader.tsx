@@ -146,6 +146,31 @@ export default function SiteHeader({ cartCount = 0 }: SiteHeaderProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`header-notifications-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          void loadUnreadNotifications(userId);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
   /*
    * =========================================================
    * UNREAD NOTIFICATIONS
@@ -533,7 +558,7 @@ const styles = StyleSheet.create({
 
   dropdown: {
     position: "absolute",
-    top: 68,
+    top: 85,
     right: 0,
     width: 150,
     backgroundColor: STORE.colors.background,

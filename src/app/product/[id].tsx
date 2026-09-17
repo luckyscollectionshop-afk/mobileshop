@@ -368,7 +368,7 @@ export default function ProductDetailScreen() {
       <SafeAreaView style={styles.center}>
         <Text style={styles.errorText}>{error ?? "Product not found."}</Text>
 
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.backButton} onPress={() => router.push("/explore")}>
           <Text style={styles.backButtonText}>← Back to products</Text>
         </Pressable>
       </SafeAreaView>
@@ -409,7 +409,7 @@ export default function ProductDetailScreen() {
             Back
             ================================================= */}
 
-        <Pressable onPress={() => router.back()} style={styles.backLink}>
+        <Pressable onPress={() => router.push("/explore")} style={styles.backLink}>
           <Text style={styles.backLinkText}>← Back to products</Text>
         </Pressable>
 

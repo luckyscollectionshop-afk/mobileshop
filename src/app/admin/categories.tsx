@@ -11,8 +11,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import SiteHeader from "@/components/SiteHeader";
 import { STORE } from "@/constants/store";
 import { supabase } from "@/lib/supabase";
 
@@ -84,7 +82,7 @@ export default function AdminCategoriesPage() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-        <SiteHeader />
+       
 
         <View style={styles.loadingContainer}>
           <ActivityIndicator
@@ -103,9 +101,9 @@ export default function AdminCategoriesPage() {
   return (
     <SafeAreaView
       style={styles.safeArea}
-      edges={["top", "bottom"]}
+      edges={[ "bottom"]}
     >
-      <SiteHeader />
+     
 
       <ScrollView
         contentContainerStyle={styles.content}

@@ -830,7 +830,7 @@ export default function CheckoutScreen() {
   if (!loading && items.length === 0) {
     return (
       <SafeAreaView
-        style={styles.safeArea}
+        style={styles.safeArea} edges={[]}
       >
         <View
           style={styles.emptyContainer}

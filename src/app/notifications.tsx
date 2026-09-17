@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -10,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-
+import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/lib/supabase";
 
 type Notification = {
@@ -30,7 +31,7 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const loadNotifications = useCallback(async () => {
     try {
       const {
@@ -69,6 +70,7 @@ export default function NotificationsScreen() {
     void loadNotifications();
 
     let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const setupRealtime = async () => {
       const {
@@ -79,60 +81,112 @@ export default function NotificationsScreen() {
         return;
       }
 
-      const channel = supabase
-        .channel(`mobile-notifications-${user.id}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${user.id}`,
-          },
-          (payload) => {
-            const newNotification = payload.new as Notification;
+      const channelName = `mobile-notifications-${user.id}`;
 
-            setNotifications((current) => {
-              if (
-                current.some(
-                  (notification) => notification.id === newNotification.id,
-                )
-              ) {
-                return current;
-              }
+      // Remove any existing channel with this name first.
+      const existingChannel = supabase
+        .getChannels()
+        .find((existing) => existing.topic === `realtime:${channelName}`);
 
-              return [newNotification, ...current];
-            });
-          },
-        )
-        .subscribe((status) => {
-          //console.log("Notifications realtime status:", status);
-        });
+      if (existingChannel) {
+        await supabase.removeChannel(existingChannel);
+      }
 
-      return channel;
-    };
-
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
-    void setupRealtime().then((createdChannel) => {
       if (cancelled) {
-        if (createdChannel) {
-          void supabase.removeChannel(createdChannel);
-        }
         return;
       }
 
-      channel = createdChannel ?? null;
-    });
+      channel = supabase.channel(channelName).on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newNotification = payload.new as Notification;
+
+          setNotifications((current) => {
+            if (
+              current.some(
+                (notification) => notification.id === newNotification.id,
+              )
+            ) {
+              return current;
+            }
+
+            return [newNotification, ...current];
+          });
+        },
+      );
+
+      await channel.subscribe();
+    };
+
+    void setupRealtime();
 
     return () => {
       cancelled = true;
 
       if (channel) {
         void supabase.removeChannel(channel);
+        channel = null;
       }
     };
   }, [loadNotifications]);
+
+  const markAllAsRead = async () => {
+    const unreadNotifications = notifications.filter(
+      (notification) => !notification.read_at,
+    );
+
+    if (unreadNotifications.length === 0) {
+      return;
+    }
+
+    setMarkingAllRead(true);
+
+    const readAt = new Date().toISOString();
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return;
+      }
+
+      const { error } = await supabase
+        .from("notifications")
+        .update({
+          read_at: readAt,
+        })
+        .eq("user_id", user.id)
+        .is("read_at", null);
+
+      if (error) {
+        throw error;
+      }
+
+      setNotifications((current) =>
+        current.map((notification) => ({
+          ...notification,
+          read_at: notification.read_at ?? readAt,
+        })),
+      );
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+
+      Alert.alert(
+        "Unable to update notifications",
+        "Could not mark all notifications as read.",
+      );
+    } finally {
+      setMarkingAllRead(false);
+    }
+  };
 
   const markAsRead = async (notification: Notification) => {
     if (notification.read_at) {
@@ -248,9 +302,29 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerTopRow}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+
+          {notifications.some((item) => !item.read_at) && (
+            <Pressable
+              onPress={() => void markAllAsRead()}
+              disabled={markingAllRead}
+              style={({ pressed }) => [
+                styles.markAllButton,
+                pressed && styles.pressed,
+                markingAllRead && styles.disabledButton,
+              ]}
+            >
+              {markingAllRead ? (
+                <ActivityIndicator size="small" color="#8B6B35" />
+              ) : (
+                <Text style={styles.markAllText}>Mark all as read</Text>
+              )}
+            </Pressable>
+          )}
+        </View>
 
         {notifications.length > 0 && (
           <Text style={styles.headerCount}>
@@ -290,7 +364,7 @@ export default function NotificationsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -320,7 +394,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#8B6B35",
   },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
 
+  markAllButton: {
+    minHeight: 36,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  markAllText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#8B6B35",
+  },
+
+  disabledButton: {
+    opacity: 0.5,
+  },
   list: {
     padding: 16,
     paddingBottom: 30,

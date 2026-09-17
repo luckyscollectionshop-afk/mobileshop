@@ -1,3 +1,4 @@
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,10 +9,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
 
-import { supabase } from "@/lib/supabase";
 import { STORE } from "@/constants/store";
+import { supabase } from "@/lib/supabase";
 
 type Order = {
   id: string;
@@ -81,44 +81,33 @@ export default function OrdersScreen() {
         throw ordersError;
       }
 
-      const formattedOrders: Order[] = (data ?? []).map(
-        (order) => ({
-          ...order,
-          subtotal: Number(order.subtotal ?? 0),
-          shipping_cost: Number(
-            order.shipping_cost ?? 0,
-          ),
-          total: Number(order.total ?? 0),
-        }),
-      );
+      const formattedOrders: Order[] = (data ?? []).map((order) => ({
+        ...order,
+        subtotal: Number(order.subtotal ?? 0),
+        shipping_cost: Number(order.shipping_cost ?? 0),
+        total: Number(order.total ?? 0),
+      }));
 
       setOrders(formattedOrders);
     } catch (err) {
       console.error("❌ Load orders error:", err);
 
-      setError(
-        "Unable to load your orders. Please try again.",
-      );
+      setError("Unable to load your orders. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
   function formatDate(date: string) {
-    return new Date(date).toLocaleDateString(
-      "en-CH",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      },
-    );
+    return new Date(date).toLocaleDateString("en-CH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   }
 
   function paymentLabel(method: string) {
-    return method === "twint"
-      ? "TWINT"
-      : "Bank Transfer";
+    return method === "twint" ? "TWINT" : "Bank Transfer";
   }
 
   if (loading) {
@@ -126,15 +115,13 @@ export default function OrdersScreen() {
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" />
 
-        <Text style={styles.loadingText}>
-          Loading your orders...
-        </Text>
+        <Text style={styles.loadingText}>Loading your orders...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={[]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.container}
@@ -142,18 +129,11 @@ export default function OrdersScreen() {
         {/* Header */}
 
         <View style={styles.headerRow}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={10}
-          >
-            <Text style={styles.backText}>
-              ← Back
-            </Text>
+          <Pressable onPress={() => router.back()} hitSlop={10}>
+            <Text style={styles.backText}>← Back</Text>
           </Pressable>
 
-          <Text style={styles.title}>
-            My Orders
-          </Text>
+          <Text style={styles.title}>My Orders</Text>
 
           <View style={styles.headerSpacer} />
         </View>
@@ -166,17 +146,10 @@ export default function OrdersScreen() {
 
         {error ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorText}>
-              {error}
-            </Text>
+            <Text style={styles.errorText}>{error}</Text>
 
-            <Pressable
-              style={styles.retryButton}
-              onPress={loadOrders}
-            >
-              <Text style={styles.retryText}>
-                Try again
-              </Text>
+            <Pressable style={styles.retryButton} onPress={loadOrders}>
+              <Text style={styles.retryText}>Try again</Text>
             </Pressable>
           </View>
         ) : null}
@@ -185,13 +158,9 @@ export default function OrdersScreen() {
 
         {!error && orders.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>
-              🛍️
-            </Text>
+            <Text style={styles.emptyIcon}>🛍️</Text>
 
-            <Text style={styles.emptyTitle}>
-              No orders yet
-            </Text>
+            <Text style={styles.emptyTitle}>No orders yet</Text>
 
             <Text style={styles.emptyText}>
               You haven't placed any orders yet.
@@ -199,13 +168,9 @@ export default function OrdersScreen() {
 
             <Pressable
               style={styles.primaryButton}
-              onPress={() =>
-                router.replace("/explore")
-              }
+              onPress={() => router.replace("/explore")}
             >
-              <Text style={styles.primaryButtonText}>
-                Start shopping
-              </Text>
+              <Text style={styles.primaryButtonText}>Start shopping</Text>
             </Pressable>
           </View>
         ) : null}
@@ -214,15 +179,10 @@ export default function OrdersScreen() {
 
         <View style={styles.orderList}>
           {orders.map((order) => (
-            <View
-              key={order.id}
-              style={styles.orderCard}
-            >
+            <View key={order.id} style={styles.orderCard}>
               <View style={styles.orderTop}>
                 <View style={styles.orderHeaderInfo}>
-                  <Text style={styles.orderNumber}>
-                    {order.order_number}
-                  </Text>
+                  <Text style={styles.orderNumber}>{order.order_number}</Text>
 
                   <Text style={styles.date}>
                     {formatDate(order.created_at)}
@@ -230,51 +190,34 @@ export default function OrdersScreen() {
                 </View>
 
                 <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>
-                    {order.status}
-                  </Text>
+                  <Text style={styles.statusText}>{order.status}</Text>
                 </View>
               </View>
 
               <View style={styles.badges}>
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
-                    {paymentLabel(
-                      order.payment_method,
-                    )}
+                    {paymentLabel(order.payment_method)}
                   </Text>
                 </View>
 
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {order.payment_status}
-                  </Text>
+                  <Text style={styles.badgeText}>{order.payment_status}</Text>
                 </View>
               </View>
 
               <View style={styles.orderBottom}>
                 <View>
-                  <Text style={styles.totalLabel}>
-                    Total
-                  </Text>
+                  <Text style={styles.totalLabel}>Total</Text>
 
-                  <Text style={styles.total}>
-                    CHF{" "}
-                    {order.total.toFixed(2)}
-                  </Text>
+                  <Text style={styles.total}>CHF {order.total.toFixed(2)}</Text>
                 </View>
 
                 <Pressable
                   style={styles.viewButton}
-                  onPress={() =>
-                    router.push(
-                      `./orders/${order.id}`,
-                    )
-                  }
+                  onPress={() => router.push(`./orders/${order.id}`)}
                 >
-                  <Text style={styles.viewButtonText}>
-                    View order
-                  </Text>
+                  <Text style={styles.viewButtonText}>View order</Text>
                 </Pressable>
               </View>
             </View>
@@ -352,8 +295,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 15,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   orderTop: {
@@ -454,8 +396,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 30,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   emptyIcon: {
