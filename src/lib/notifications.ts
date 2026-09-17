@@ -37,9 +37,7 @@ export async function registerForPushNotifications() {
    * emulator for this purpose.
    */
   if (!Device.isDevice) {
-    console.log(
-      "Push notifications require a physical Android device.",
-    );
+    console.log("Push notifications require a physical Android device.");
 
     return null;
   }
@@ -54,16 +52,12 @@ export async function registerForPushNotifications() {
    */
 
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(
-      "default",
-      {
-        name: "Default",
-        importance:
-          Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#bd9650",
-      },
-    );
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "Default",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#bd9650",
+    });
   }
 
   /*
@@ -72,9 +66,7 @@ export async function registerForPushNotifications() {
    * ---------------------------------------------------------
    */
 
-  const {
-    status: existingStatus,
-  } = await Notifications.getPermissionsAsync();
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
 
   let finalStatus = existingStatus;
 
@@ -83,17 +75,13 @@ export async function registerForPushNotifications() {
    */
 
   if (existingStatus !== "granted") {
-    const {
-      status,
-    } = await Notifications.requestPermissionsAsync();
+    const { status } = await Notifications.requestPermissionsAsync();
 
     finalStatus = status;
   }
 
   if (finalStatus !== "granted") {
-    console.log(
-      "Notification permission was not granted.",
-    );
+    console.log("Notification permission was not granted.");
 
     return null;
   }
@@ -104,13 +92,10 @@ export async function registerForPushNotifications() {
    * ---------------------------------------------------------
    */
 
-  const projectId =
-    Constants.expoConfig?.extra?.eas?.projectId;
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
 
   if (!projectId) {
-    console.error(
-      "Expo projectId is missing from app configuration.",
-    );
+    console.error("Expo projectId is missing from app configuration.");
 
     return null;
   }
@@ -121,18 +106,13 @@ export async function registerForPushNotifications() {
    * ---------------------------------------------------------
    */
 
-  const tokenResponse =
-    await Notifications.getExpoPushTokenAsync({
-      projectId,
-    });
+  const tokenResponse = await Notifications.getExpoPushTokenAsync({
+    projectId,
+  });
 
-  const expoPushToken =
-    tokenResponse.data;
+  const expoPushToken = tokenResponse.data;
 
-  console.log(
-    "Expo push token:",
-    expoPushToken,
-  );
+  //console.log(    "Expo push token:",    expoPushToken,  );
 
   /*
    * ---------------------------------------------------------
@@ -146,18 +126,13 @@ export async function registerForPushNotifications() {
   } = await supabase.auth.getUser();
 
   if (userError) {
-    console.error(
-      "Unable to get current user:",
-      userError.message,
-    );
+    console.error("Unable to get current user:", userError.message);
 
     return expoPushToken;
   }
 
   if (!user) {
-    console.log(
-      "No logged-in user. Push token was not saved.",
-    );
+    console.log("No logged-in user. Push token was not saved.");
 
     return expoPushToken;
   }
@@ -168,34 +143,24 @@ export async function registerForPushNotifications() {
    * ---------------------------------------------------------
    */
 
-  const { error: saveError } = await supabase
-    .from("push_tokens")
-    .upsert(
-      {
-        user_id: user.id,
-        expo_push_token: expoPushToken,
-        platform: Platform.OS,
-        device_name: Device.deviceName ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict:
-          "user_id,expo_push_token",
-      },
-    );
+  const { error: saveError } = await supabase.from("push_tokens").upsert(
+    {
+      user_id: user.id,
+      expo_push_token: expoPushToken,
+      platform: Platform.OS,
+      device_name: Device.deviceName ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "user_id,expo_push_token",
+    },
+  );
 
   if (saveError) {
-    console.error(
-      "Unable to save push token:",
-      saveError.message,
-    );
+    console.error("Unable to save push token:", saveError.message);
 
     return expoPushToken;
   }
-
-  console.log(
-    "✅ Push token saved to Supabase.",
-  );
 
   return expoPushToken;
 }
@@ -212,26 +177,17 @@ export async function registerForPushNotifications() {
  */
 
 export function setupNotificationResponseListener(
-  onNotificationTap: (
-    data: Record<string, unknown>,
-  ) => void,
+  onNotificationTap: (data: Record<string, unknown>) => void,
 ) {
-  const subscription =
-    Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const data =
-          response.notification.request.content.data;
+  const subscription = Notifications.addNotificationResponseReceivedListener(
+    (response) => {
+      const data = response.notification.request.content.data;
 
-        console.log(
-          "Notification tapped:",
-          data,
-        );
+      console.log("Notification tapped:", data);
 
-        onNotificationTap(
-          data as Record<string, unknown>,
-        );
-      },
-    );
+      onNotificationTap(data as Record<string, unknown>);
+    },
+  );
 
   return subscription;
 }

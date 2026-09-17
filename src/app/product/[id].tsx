@@ -30,6 +30,7 @@ type Category = {
   id: string;
   name: string;
   slug: string;
+  image_url: string | null;
 };
 
 type Product = {
@@ -144,7 +145,7 @@ export default function ProductDetailScreen() {
 
       const { data: categoryLinks, error: categoryError } = await supabase
         .from("product_categories")
-        .select("categories(id, name, slug)")
+        .select("categories(id, name, slug, image_url)")
         .eq("product_id", id);
 
       if (categoryError) {
@@ -467,25 +468,35 @@ export default function ProductDetailScreen() {
           {/* Categories */}
 
           {categories.length > 0 && (
-            <View style={styles.categoryList}>
-              {categories.map((category) => (
-                <Pressable
-                  key={category.id}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/explore",
-                      params: {
-                        category: category.id,
-                      },
-                    })
-                  }
-                  style={styles.categoryBadge}
-                >
-                  <Text style={styles.categoryText}>{category.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
+  <View style={styles.categoryList}>
+    {categories.map((category) => (
+      <Pressable
+        key={category.id}
+        onPress={() =>
+          router.push({
+            pathname: "/explore",
+            params: {
+              category: category.id,
+            },
+          })
+        }
+        style={styles.categoryBadge}
+      >
+        {category.image_url ? (
+          <Image
+            source={{ uri: category.image_url }}
+            style={styles.categoryImage}
+            resizeMode="cover"
+          />
+        ) : null}
+
+        <Text style={styles.categoryText}>
+          {category.name}
+        </Text>
+      </Pressable>
+    ))}
+  </View>
+)}
 
           {/* Price */}
 
@@ -689,7 +700,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: "#efdaf2",
+    backgroundColor: "#f7f5f7",
   },
 
   mainImage: {
@@ -754,12 +765,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
-  categoryBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#f1f1f1",
-  },
+ categoryBadge: {
+  flexDirection: "row",
+  alignItems: "center",
+  paddingLeft: 4,
+  paddingRight: 12,
+  paddingVertical: 4,
+  borderRadius: 999,
+  backgroundColor: "#f1f1f1",
+},
+categoryImage: {
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  marginRight: 6,
+},
 
   categoryText: {
     fontSize: 13,

@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -96,8 +95,7 @@ export default function NotificationsScreen() {
             setNotifications((current) => {
               if (
                 current.some(
-                  (notification) =>
-                    notification.id === newNotification.id,
+                  (notification) => notification.id === newNotification.id,
                 )
               ) {
                 return current;
@@ -108,7 +106,7 @@ export default function NotificationsScreen() {
           },
         )
         .subscribe((status) => {
-          console.log("Notifications realtime status:", status);
+          //console.log("Notifications realtime status:", status);
         });
 
       return channel;
@@ -167,29 +165,25 @@ export default function NotificationsScreen() {
     );
   };
 
-  const handleNotificationPress = async (
-    notification: Notification,
-  ) => {
+  const handleNotificationPress = async (notification: Notification) => {
     await markAsRead(notification);
 
-    /*
-     * IMPORTANT:
-     * This stays completely inside the MOBILE APP.
-     *
-     * We do NOT open:
-     * /orders/... on the web
-     * /admin/orders/... on the web
-     *
-     * We open the mobile Expo Router route:
-     * /orders/[id]
-     */
     if (notification.order_id) {
-      router.push({
-        pathname: "/orders/[id]",
-        params: {
-          id: notification.order_id,
-        },
-      });
+      if (notification.type.startsWith("admin_")) {
+        router.push({
+          pathname: "/admin/order/[id]",
+          params: {
+            id: notification.order_id,
+          },
+        });
+      } else {
+        router.push({
+          pathname: "/orders/[id]",
+          params: {
+            id: notification.order_id,
+          },
+        });
+      }
 
       return;
     }
@@ -208,11 +202,7 @@ export default function NotificationsScreen() {
     });
   };
 
-  const renderNotification = ({
-    item,
-  }: {
-    item: Notification;
-  }) => {
+  const renderNotification = ({ item }: { item: Notification }) => {
     const unread = !item.read_at;
     const hasOrder = Boolean(item.order_id);
 
@@ -227,7 +217,9 @@ export default function NotificationsScreen() {
       >
         <View style={styles.iconContainer}>
           <Ionicons
-            name={item.order_id ? "bag-handle-outline" : "notifications-outline"}
+            name={
+              item.order_id ? "bag-handle-outline" : "notifications-outline"
+            }
             size={22}
             color="#8B6B35"
           />
@@ -236,10 +228,7 @@ export default function NotificationsScreen() {
         <View style={styles.content}>
           <View style={styles.titleRow}>
             <Text
-              style={[
-                styles.title,
-                unread && styles.unreadTitle,
-              ]}
+              style={[styles.title, unread && styles.unreadTitle]}
               numberOfLines={2}
             >
               {item.title}
@@ -250,15 +239,9 @@ export default function NotificationsScreen() {
 
           <Text style={styles.message}>{item.message}</Text>
 
-          <Text style={styles.date}>
-            {formatDate(item.created_at)}
-          </Text>
+          <Text style={styles.date}>{formatDate(item.created_at)}</Text>
 
-          {hasOrder && (
-            <Text style={styles.tapHint}>
-              Tap to view order
-            </Text>
-          )}
+          {hasOrder && <Text style={styles.tapHint}>Tap to view order</Text>}
         </View>
       </Pressable>
     );
@@ -279,21 +262,13 @@ export default function NotificationsScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#8B6B35" />
-          <Text style={styles.loadingText}>
-            Loading notifications...
-          </Text>
+          <Text style={styles.loadingText}>Loading notifications...</Text>
         </View>
       ) : notifications.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons
-            name="notifications-outline"
-            size={42}
-            color="#999"
-          />
+          <Ionicons name="notifications-outline" size={42} color="#999" />
 
-          <Text style={styles.emptyTitle}>
-            No notifications yet
-          </Text>
+          <Text style={styles.emptyTitle}>No notifications yet</Text>
 
           <Text style={styles.emptyText}>
             Your order updates will appear here.

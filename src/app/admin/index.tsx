@@ -77,7 +77,10 @@ export default function AdminDashboard() {
         .select("id, status, payment_status");
 
       if (ordersError) {
-        console.log("Unable to load order statistics:", ordersError.message);
+        console.log(
+          "Unable to load order statistics:",
+          ordersError.message,
+        );
 
         return;
       }
@@ -91,13 +94,17 @@ export default function AdminDashboard() {
           (order) => order.payment_status === "pending",
         ).length,
 
-        processing: orderRows.filter((order) => order.status === "processing")
-          .length,
+        processing: orderRows.filter(
+          (order) => order.status === "processing",
+        ).length,
 
-        shipped: orderRows.filter((order) => order.status === "shipped").length,
+        shipped: orderRows.filter(
+          (order) => order.status === "shipped",
+        ).length,
 
-        delivered: orderRows.filter((order) => order.status === "delivered")
-          .length,
+        delivered: orderRows.filter(
+          (order) => order.status === "delivered",
+        ).length,
       });
     } catch (error) {
       console.log("Admin dashboard error:", error);
@@ -113,9 +120,14 @@ export default function AdminDashboard() {
         <SiteHeader />
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={STORE.colors.primary} />
+          <ActivityIndicator
+            size="large"
+            color={STORE.colors.primary}
+          />
 
-          <Text style={styles.loadingText}>Loading admin dashboard...</Text>
+          <Text style={styles.loadingText}>
+            Loading admin dashboard...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -167,6 +179,7 @@ export default function AdminDashboard() {
 
           <Text style={styles.arrow}>›</Text>
         </Pressable>
+
         {/* ================================================= */}
         {/* PRODUCTS */}
         {/* ================================================= */}
@@ -190,6 +203,7 @@ export default function AdminDashboard() {
 
           <Text style={styles.arrow}>›</Text>
         </Pressable>
+
         {/* ================================================= */}
         {/* ORDER STATISTICS */}
         {/* ================================================= */}
@@ -229,19 +243,54 @@ export default function AdminDashboard() {
         </View>
 
         {/* ================================================= */}
-        {/* FUTURE ADMIN AREAS */}
+        {/* SHOP MANAGEMENT */}
         {/* ================================================= */}
 
         <Text style={styles.sectionTitle}>Shop management</Text>
 
-        <View style={styles.futureCard}>
-          <Text style={styles.futureTitle}>More admin tools</Text>
+        {/* CATEGORIES */}
 
-          <Text style={styles.futureText}>
-            Product management, categories, homepage settings and other shop
-            administration can be added here later.
-          </Text>
-        </View>
+        <Pressable
+          style={styles.mainCard}
+          onPress={() => router.push("/admin/categories")}
+        >
+          <View style={styles.cardIcon}>
+            <Text style={styles.cardIconText}>🏷️</Text>
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>Categories</Text>
+
+            <Text style={styles.cardDescription}>
+              Add, edit and manage the categories used to organize your
+              products.
+            </Text>
+          </View>
+
+          <Text style={styles.arrow}>›</Text>
+        </Pressable>
+
+        {/* SHOPFRONT SETTINGS */}
+
+        <Pressable
+          style={[styles.mainCard, { marginTop: 12 }]}
+          onPress={() => router.push("/admin/shopsettings")}
+        >
+          <View style={styles.cardIcon}>
+            <Text style={styles.cardIconText}>🏠</Text>
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>Shopfront settings</Text>
+
+            <Text style={styles.cardDescription}>
+              Manage your homepage hero, product sections, social links and
+              other storefront settings.
+            </Text>
+          </View>
+
+          <Text style={styles.arrow}>›</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -273,7 +322,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: "#6f6b64",
+    color: "#6f6d64",
   },
 
   pageHeader: {
@@ -377,28 +426,6 @@ const styles = StyleSheet.create({
   statLabel: {
     marginTop: 4,
     fontSize: 11,
-    color: "#716d66",
-  },
-
-  futureCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "#d8d5cf",
-    padding: 18,
-    backgroundColor: "#faf8f3",
-  },
-
-  futureTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#292824",
-  },
-
-  futureText: {
-    marginTop: 6,
-    fontSize: 12,
-    lineHeight: 18,
     color: "#716d66",
   },
 });
