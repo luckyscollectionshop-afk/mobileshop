@@ -10,36 +10,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-
 import { STORE } from "@/constants/store";
 import { supabase } from "@/lib/supabase";
-
-type AdminStats = {
-  totalOrders: number;
-  pendingPayment: number;
-  processing: number;
-  shipped: number;
-  delivered: number;
-};
 
 export default function AdminDashboard() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [stats, setStats] = useState<AdminStats>({
-    totalOrders: 0,
-    pendingPayment: 0,
-    processing: 0,
-    shipped: 0,
-    delivered: 0,
-  });
 
   useEffect(() => {
-    checkAdminAndLoadStats();
+    checkAdmin();
   }, []);
 
-  async function checkAdminAndLoadStats() {
+  async function checkAdmin() {
     try {
       setLoading(true);
 
@@ -52,14 +36,18 @@ export default function AdminDashboard() {
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+      const { data: profile, error: profileError } =
+        await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
 
       if (profileError) {
-        console.log("Unable to load admin profile:", profileError.message);
+        console.log(
+          "Unable to load admin profile:",
+          profileError.message,
+        );
 
         router.replace("/");
         return;
@@ -71,41 +59,6 @@ export default function AdminDashboard() {
       }
 
       setIsAdmin(true);
-
-      const { data: orders, error: ordersError } = await supabase
-        .from("orders")
-        .select("id, status, payment_status");
-
-      if (ordersError) {
-        console.log(
-          "Unable to load order statistics:",
-          ordersError.message,
-        );
-
-        return;
-      }
-
-      const orderRows = orders ?? [];
-
-      setStats({
-        totalOrders: orderRows.length,
-
-        pendingPayment: orderRows.filter(
-          (order) => order.payment_status === "pending",
-        ).length,
-
-        processing: orderRows.filter(
-          (order) => order.status === "processing",
-        ).length,
-
-        shipped: orderRows.filter(
-          (order) => order.status === "shipped",
-        ).length,
-
-        delivered: orderRows.filter(
-          (order) => order.status === "delivered",
-        ).length,
-      });
     } catch (error) {
       console.log("Admin dashboard error:", error);
       router.replace("/");
@@ -116,9 +69,10 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-        
-
+      <SafeAreaView
+        style={styles.safeArea}
+        edges={["bottom"]}
+      >
         <View style={styles.loadingContainer}>
           <ActivityIndicator
             size="large"
@@ -138,9 +92,10 @@ export default function AdminDashboard() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-     
-
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={["bottom"]}
+    >
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -205,48 +160,12 @@ export default function AdminDashboard() {
         </Pressable>
 
         {/* ================================================= */}
-        {/* ORDER STATISTICS */}
-        {/* ================================================= */}
-
-        <Text style={styles.sectionTitle}>Order overview</Text>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.totalOrders}</Text>
-
-            <Text style={styles.statLabel}>Total orders</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.pendingPayment}</Text>
-
-            <Text style={styles.statLabel}>Pending payment</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.processing}</Text>
-
-            <Text style={styles.statLabel}>Processing</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.shipped}</Text>
-
-            <Text style={styles.statLabel}>Shipped</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.delivered}</Text>
-
-            <Text style={styles.statLabel}>Delivered</Text>
-          </View>
-        </View>
-
-        {/* ================================================= */}
         {/* SHOP MANAGEMENT */}
         {/* ================================================= */}
 
-        <Text style={styles.sectionTitle}>Shop management</Text>
+        <Text style={styles.sectionTitle}>
+          Shop management
+        </Text>
 
         {/* CATEGORIES */}
 
@@ -273,7 +192,10 @@ export default function AdminDashboard() {
         {/* SHOPFRONT SETTINGS */}
 
         <Pressable
-          style={[styles.mainCard, { marginTop: 12 }]}
+          style={[
+            styles.mainCard,
+            { marginTop: 12 },
+          ]}
           onPress={() => router.push("/admin/shopsettings")}
         >
           <View style={styles.cardIcon}>
@@ -281,7 +203,9 @@ export default function AdminDashboard() {
           </View>
 
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>Shopfront settings</Text>
+            <Text style={styles.cardTitle}>
+              Shopfront settings
+            </Text>
 
             <Text style={styles.cardDescription}>
               Manage your homepage hero, product sections, social links and
@@ -398,34 +322,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#292824",
-  },
-
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-
-  statCard: {
-    width: "48%",
-    minHeight: 88,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#d8d5cf",
-    backgroundColor: "#fffdf9",
-    padding: 15,
-    justifyContent: "center",
-  },
-
-  statNumber: {
-    fontSize: 25,
-    fontWeight: "700",
-    color: "#292824",
-  },
-
-  statLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    color: "#716d66",
   },
 });

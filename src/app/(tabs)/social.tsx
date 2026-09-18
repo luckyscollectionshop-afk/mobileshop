@@ -103,113 +103,86 @@ async function openSocialLink(url: string) {
   }
 }
 
+    // ---------------------------------------------------------
+  // CONTACT FORM
   // ---------------------------------------------------------
-  // EMAILJS
-  // ---------------------------------------------------------
 
-  async function sendMessage() {
-    if (!name.trim()) {
-      Alert.alert("Contact Us", "Please enter your name.");
-      return;
-    }
-
-    if (!email.trim()) {
-      Alert.alert("Contact Us", "Please enter your email address.");
-      return;
-    }
-
-    if (!message.trim()) {
-      Alert.alert("Contact Us", "Please enter a message.");
-      return;
-    }
-
-    const serviceId =
-      process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID;
-
-    const templateId =
-      process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID;
-
-    const publicKey =
-      process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY;
-
-    if (!serviceId || !templateId || !publicKey) {
-      console.error(
-        "EmailJS environment variables are missing.",
-      );
-
-      Alert.alert(
-        "Contact Us",
-        "Email service is not configured correctly. Please try again later.",
-      );
-
-      return;
-    }
-
-    setSending(true);
-
-    try {
-      const response = await fetch(
-        "https://api.emailjs.com/api/v1.0/email/send",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            service_id: serviceId,
-            template_id: templateId,
-            user_id: publicKey,
-
-            template_params: {
-              name: name.trim(),
-              email: email.trim(),
-              message: message.trim(),
-            },
-          }),
-        },
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-
-        console.error(
-          "EmailJS response:",
-          response.status,
-          errorText,
-        );
-
-        throw new Error(
-          `EmailJS returned status ${response.status}.`,
-        );
-      }
-
-      Alert.alert(
-        "Message sent ❤️",
-        "Your message has been sent successfully. Thank you!",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setName("");
-              setEmail("");
-              setMessage("");
-              setContactOpen(false);
-            },
-          },
-        ],
-      );
-    } catch (error) {
-      console.error("EmailJS error:", error);
-
-      Alert.alert(
-        "Message not sent",
-        "Sorry, your message could not be sent. Please try again.",
-      );
-    } finally {
-      setSending(false);
-    }
+async function sendMessage() {
+  if (!name.trim()) {
+    Alert.alert("Contact Us", "Please enter your name.");
+    return;
   }
 
+  if (!email.trim()) {
+    Alert.alert("Contact Us", "Please enter your email address.");
+    return;
+  }
+
+  if (!message.trim()) {
+    Alert.alert("Contact Us", "Please enter a message.");
+    return;
+  }
+
+  setSending(true);
+
+  try {
+    const apiUrl = process.env.EXPO_PUBLIC_WEB_API_URL;
+
+    if (!apiUrl) {
+      throw new Error("Contact service is not configured.");
+    }
+
+    const response = await fetch(`${apiUrl}/api/contact`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: name.trim(),
+        email: email.trim(),
+        subject: "Message from Lucky Charm Creation",
+        message: message.trim(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Contact API response:", response.status, data);
+
+      throw new Error(
+        data?.error || "Could not send your message.",
+      );
+    }
+
+    Alert.alert(
+      "Message sent ❤️",
+      "Your message has been sent successfully. Thank you!",
+      [
+        {
+          text: "OK",
+          onPress: () => {
+            setName("");
+            setEmail("");
+            setMessage("");
+            setContactOpen(false);
+          },
+        },
+      ],
+    );
+  } catch (error) {
+    console.error("Contact form error:", error);
+
+    Alert.alert(
+      "Message not sent",
+      error instanceof Error
+        ? error.message
+        : "Sorry, your message could not be sent. Please try again.",
+    );
+  } finally {
+    setSending(false);
+  }
+}
   // ---------------------------------------------------------
   // LOADING
   // ---------------------------------------------------------

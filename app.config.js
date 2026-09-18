@@ -17,18 +17,13 @@ module.exports = {
 
     android: {
       googleServicesFile:
-  process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+        process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
       predictiveBackGestureEnabled: false,
       package: "com.anupama1.mobileshop",
 
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
-        foregroundImage:
-          "./assets/images/android-icon-foreground.png",
-        backgroundImage:
-          "./assets/images/android-icon-background.png",
-        monochromeImage:
-          "./assets/images/android-icon-monochrome.png",
+        foregroundImage: "./assets/images/lcc.png",
       },
     },
 
@@ -50,7 +45,7 @@ module.exports = {
       "expo-video",
       "expo-web-browser",
       "expo-notifications",
-       "expo-image-picker",
+      "expo-image-picker",
     ],
 
     experiments: {

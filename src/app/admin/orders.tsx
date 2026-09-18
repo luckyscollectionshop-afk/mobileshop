@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -28,6 +28,28 @@ type Order = {
   created_at: string;
 };
 
+type FilterKey =
+  | "all"
+  | "pending_payment"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "cancelled";
+
+type Filter = {
+  key: FilterKey;
+  label: string;
+};
+
+const FILTERS: Filter[] = [
+  { key: "all", label: "All orders" },
+  { key: "pending_payment", label: "Pending payment" },
+  { key: "processing", label: "Processing" },
+  { key: "shipped", label: "Shipped" },
+  { key: "delivered", label: "Delivered" },
+  { key: "cancelled", label: "Cancelled" },
+];
+
 export default function AdminOrdersPage() {
   const router = useRouter();
 
@@ -35,9 +57,10 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(
-    null,
-  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [selectedFilter, setSelectedFilter] =
+    useState<FilterKey>("all");
 
   useFocusEffect(
     useCallback(() => {
@@ -143,11 +166,70 @@ export default function AdminOrdersPage() {
     return `CHF ${Number(total).toFixed(2)}`;
   }
 
+  // ---------------------------------------------------------
+  // FILTER COUNTS
+  // ---------------------------------------------------------
+
+  const counts = {
+    all: orders.length,
+
+    pending_payment: orders.filter(
+      (order) => order.payment_status === "pending",
+    ).length,
+
+    processing: orders.filter(
+      (order) => order.status === "processing",
+    ).length,
+
+    shipped: orders.filter(
+      (order) => order.status === "shipped",
+    ).length,
+
+    delivered: orders.filter(
+      (order) => order.status === "delivered",
+    ).length,
+
+    cancelled: orders.filter(
+      (order) => order.status === "cancelled",
+    ).length,
+  };
+
+  // ---------------------------------------------------------
+  // FILTERED ORDERS
+  // ---------------------------------------------------------
+
+  const filteredOrders = orders.filter((order) => {
+    switch (selectedFilter) {
+      case "pending_payment":
+        return order.payment_status === "pending";
+
+      case "processing":
+        return order.status === "processing";
+
+      case "shipped":
+        return order.status === "shipped";
+
+      case "delivered":
+        return order.status === "delivered";
+
+      case "cancelled":
+        return order.status === "cancelled";
+
+      case "all":
+      default:
+        return true;
+    }
+  });
+
+  function getFilterCount(key: FilterKey) {
+    return counts[key];
+  }
+
   if (loading) {
     return (
       <SafeAreaView
         style={styles.safeArea}
-        edges={[ "bottom"]}
+        edges={["bottom"]}
       >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" />
@@ -184,14 +266,67 @@ export default function AdminOrdersPage() {
            ===================================================== */}
 
         <View style={styles.header}>
-          
-
           <Text style={styles.title}>Admin Orders</Text>
 
           <Text style={styles.subtitle}>
             Manage customer orders and payments.
           </Text>
         </View>
+
+        {/* =====================================================
+            ORDER FILTERS
+           ===================================================== */}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersContainer}
+        >
+          {FILTERS.map((filter) => {
+            const selected =
+              selectedFilter === filter.key;
+
+            return (
+              <Pressable
+                key={filter.key}
+                onPress={() =>
+                  setSelectedFilter(filter.key)
+                }
+                style={[
+                  styles.filterPill,
+                  selected && styles.filterPillSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterLabel,
+                    selected && styles.filterLabelSelected,
+                  ]}
+                >
+                  {filter.label}
+                </Text>
+
+                <View
+                  style={[
+                    styles.filterCount,
+                    selected &&
+                      styles.filterCountSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterCountText,
+                      selected &&
+                        styles.filterCountTextSelected,
+                    ]}
+                  >
+                    {getFilterCount(filter.key)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         {/* =====================================================
             ERROR
@@ -219,12 +354,25 @@ export default function AdminOrdersPage() {
         ) : null}
 
         {/* =====================================================
+            FILTERED ORDER COUNT
+           ===================================================== */}
+
+        {!errorMessage ? (
+          <Text style={styles.resultText}>
+            {filteredOrders.length}{" "}
+            {filteredOrders.length === 1
+              ? "order"
+              : "orders"}
+          </Text>
+        ) : null}
+
+        {/* =====================================================
             ORDERS
            ===================================================== */}
 
-        {!errorMessage && orders.length > 0 ? (
+        {!errorMessage && filteredOrders.length > 0 ? (
           <View style={styles.ordersContainer}>
-            {orders.map((order) => (
+            {filteredOrders.map((order) => (
               <Pressable
                 key={order.id}
                 onPress={() =>
@@ -316,9 +464,7 @@ export default function AdminOrdersPage() {
                     View order
                   </Text>
 
-                  <Text style={styles.arrow}>
-                    →
-                  </Text>
+                  <Text style={styles.arrow}>→</Text>
                 </View>
               </Pressable>
             ))}
@@ -326,11 +472,18 @@ export default function AdminOrdersPage() {
         ) : !errorMessage ? (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyTitle}>
-              No orders yet
+              No{" "}
+              {selectedFilter === "all"
+                ? ""
+                : FILTERS.find(
+                    (filter) =>
+                      filter.key === selectedFilter,
+                  )?.label.toLowerCase() + " "}
+              orders
             </Text>
 
             <Text style={styles.emptyText}>
-              Customer orders will appear here.
+              There are no orders in this category.
             </Text>
           </View>
         ) : null}
@@ -368,17 +521,7 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    marginBottom: 20,
-  },
-
-  backButton: {
-    alignSelf: "flex-start",
-    marginBottom: 0,
-  },
-
-  backText: {
-    fontSize: 14,
-    color: "#6f6c66",
+    marginBottom: 16,
   },
 
   title: {
@@ -392,6 +535,79 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#77736c",
   },
+
+  /* =======================================================
+     FILTER PILLS
+     ======================================================= */
+
+  filtersContainer: {
+    paddingVertical: 4,
+    paddingRight: 20,
+    gap: 8,
+  },
+
+  filterPill: {
+    minHeight: 40,
+    paddingLeft: 14,
+    paddingRight: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#d8d5cf",
+    backgroundColor: "#fffdf8",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  filterPillSelected: {
+    backgroundColor: "#292824",
+    borderColor: "#292824",
+  },
+
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#5f5b54",
+  },
+
+  filterLabelSelected: {
+    color: "#ffffff",
+  },
+
+  filterCount: {
+    minWidth: 23,
+    height: 23,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+    backgroundColor: "#eeeae2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  filterCountSelected: {
+    backgroundColor: "#ffffff",
+  },
+
+  filterCountText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#625e57",
+  },
+
+  filterCountTextSelected: {
+    color: "#292824",
+  },
+
+  resultText: {
+    marginTop: 17,
+    marginBottom: 12,
+    fontSize: 12,
+    color: "#8a867e",
+  },
+
+  /* =======================================================
+     ORDERS
+     ======================================================= */
 
   ordersContainer: {
     gap: 14,
@@ -507,6 +723,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#292824",
+    textAlign: "center",
   },
 
   emptyText: {
@@ -516,12 +733,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  /* =======================================================
+     ERROR
+     ======================================================= */
+
   errorBox: {
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "#d9b9b5",
     backgroundColor: "#fff7f6",
     padding: 18,
+    marginTop: 14,
     marginBottom: 14,
   },
 

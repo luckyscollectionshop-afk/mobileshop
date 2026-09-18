@@ -1,5 +1,6 @@
-import { File } from "expo-file-system";
+import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import { File } from "expo-file-system";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -111,11 +112,6 @@ export default function ProductForm({
 
   // -------------------------------------------------------
   // IMAGES
-  //
-  // For the first mobile version we keep existing image URLs
-  // and allow adding image URLs manually.
-  // We will add native image picker + Cloudinary upload
-  // separately once the core form is green.
   // -------------------------------------------------------
 
   const [images, setImages] = useState<string[]>(product?.images ?? []);
@@ -164,7 +160,8 @@ export default function ProductForm({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
-
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiImageUri, setAiImageUri] = useState<string | null>(null);
   // -------------------------------------------------------
   // KEEP CATEGORY STATE IN SYNC
   // -------------------------------------------------------
@@ -174,7 +171,7 @@ export default function ProductForm({
   }, [categories]);
 
   // -------------------------------------------------------
-  // IMAGE
+  // IMAGE PICK + UPLOAD
   // -------------------------------------------------------
 
   async function pickAndUploadImage() {
@@ -199,6 +196,7 @@ export default function ProductForm({
       if (result.canceled || !result.assets.length) {
         return;
       }
+      setAiImageUri(result.assets[0].uri);
 
       const {
         data: { session },
@@ -222,16 +220,11 @@ export default function ProductForm({
         console.log("Uploading image:", fileName, mimeType, asset.uri);
 
         const formData = new FormData();
+
         const file = new File(asset.uri);
 
-        // Expo 57 requires a real Blob/File for native FormData uploads.
         formData.append("file", file);
-
         formData.append("folder", "products");
-
-        // ---------------------------------------------------
-        // Upload to existing Next.js API
-        // ---------------------------------------------------
 
         const response = await fetch(
           `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/upload`,
@@ -271,98 +264,215 @@ export default function ProductForm({
     }
   }
 
-async function deleteCloudinaryImage(
-  url: string,
-  accessToken: string,
-) {
-  const response = await fetch(
-    `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/admin/cloudinary/delete`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        url,
-      }),
-    },
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      data?.error ?? "Failed to delete image from Cloudinary.",
+  async function analyzeProductWithAI() {
+  if (!aiImageUri) {
+    Alert.alert(
+      "AI Product Analysis",
+      "Please choose a product image first. AI can analyze one image at a time.",
     );
-  }
-
-  return data;
-}
-
-async function removeImage(index: number) {
-  const url = images[index];
-
-  if (!url) {
     return;
   }
 
-  Alert.alert(
-    "Remove image",
-    "Remove this image from Cloudinary and from the product?",
-    [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
+  setAiAnalyzing(true);
 
-            if (!session?.access_token) {
-              throw new Error(
-                "Your admin session has expired. Please sign in again.",
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      Alert.alert(
+        "Sign in required",
+        "Your admin session has expired. Please sign in again.",
+      );
+
+      router.replace("/auth/login");
+      return;
+    }
+
+    console.log("AI image URI:", aiImageUri);
+
+    const file = new File(aiImageUri);
+
+    const base64 = await file.base64();
+
+    if (!base64) {
+      throw new Error("Could not read the selected image.");
+    }
+
+    const response = await fetch(
+      `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/admin/ai/analyze-product`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: "image/jpeg",
+          fileName: "product-image.jpg",
+        }),
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error || "AI analysis failed.",
+      );
+    }
+
+    if (data.name) {
+      setName(data.name);
+    }
+
+    if (data.description) {
+      setDescription(data.description);
+    }
+
+    if (Array.isArray(data.keywords)) {
+      const aiKeywords = data.keywords
+        .filter(
+          (keyword: unknown): keyword is string =>
+            typeof keyword === "string",
+        )
+        .map((keyword: string) =>
+          keyword.trim().toLowerCase(),
+        )
+        .filter((keyword: string) => Boolean(keyword));
+
+      setKeywords(aiKeywords.join(", "));
+    }
+
+    if (data.size) {
+      setSize(data.size);
+    }
+
+    if (data.suggestedCategory) {
+      const suggested = availableCategories.find(
+        (category) =>
+          category.name.toLowerCase().trim() ===
+          data.suggestedCategory.toLowerCase().trim(),
+      );
+
+      if (suggested) {
+        setCategoryIds((current) =>
+          current.includes(suggested.id)
+            ? current
+            : [...current, suggested.id],
+        );
+      }
+    }
+
+    Alert.alert(
+      "AI complete",
+      "Product details have been filled in.",
+    );
+  } catch (error) {
+    console.error(
+      "AI product analysis error:",
+      error,
+    );
+
+    Alert.alert(
+      "AI analysis failed",
+      error instanceof Error
+        ? error.message
+        : "Could not analyze the product image.",
+    );
+  } finally {
+    setAiAnalyzing(false);
+  }
+}
+  // -------------------------------------------------------
+  // DELETE CLOUDINARY IMAGE
+  // -------------------------------------------------------
+
+  async function deleteCloudinaryImage(url: string, accessToken: string) {
+    const response = await fetch(
+      `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/admin/cloudinary/delete`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          url,
+        }),
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data?.error ?? "Failed to delete image from Cloudinary.");
+    }
+
+    return data;
+  }
+
+  // -------------------------------------------------------
+  // REMOVE IMAGE
+  // -------------------------------------------------------
+
+  async function removeImage(index: number) {
+    const url = images[index];
+
+    if (!url) {
+      return;
+    }
+
+    Alert.alert(
+      "Remove image",
+      "Remove this image from Cloudinary and from the product?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const {
+                data: { session },
+              } = await supabase.auth.getSession();
+
+              if (!session?.access_token) {
+                throw new Error(
+                  "Your admin session has expired. Please sign in again.",
+                );
+              }
+
+              await deleteCloudinaryImage(url, session.access_token);
+
+              setImages((current) =>
+                current.filter((_, imageIndex) => imageIndex !== index),
+              );
+
+              Alert.alert(
+                "Image removed",
+                "The image has been deleted from Cloudinary.",
+              );
+            } catch (error) {
+              console.error("Cloudinary image delete error:", error);
+
+              Alert.alert(
+                "Remove failed",
+                error instanceof Error
+                  ? error.message
+                  : "Could not delete the image.",
               );
             }
-
-            await deleteCloudinaryImage(
-              url,
-              session.access_token,
-            );
-
-            setImages((current) =>
-              current.filter(
-                (_, imageIndex) => imageIndex !== index,
-              ),
-            );
-
-            Alert.alert(
-              "Image removed",
-              "The image has been deleted from Cloudinary.",
-            );
-          } catch (error) {
-            console.error(
-              "Cloudinary image delete error:",
-              error,
-            );
-
-            Alert.alert(
-              "Remove failed",
-              error instanceof Error
-                ? error.message
-                : "Could not delete the image.",
-            );
-          }
+          },
         },
-      },
-    ],
-  );
-}
+      ],
+    );
+  }
 
   // -------------------------------------------------------
   // VIDEO
@@ -573,7 +683,6 @@ async function removeImage(index: number) {
         throw new Error("Product could not be saved.");
       }
 
-      // Replace product-category links.
       const { error: deleteCategoryError } = await supabase
         .from("product_categories")
         .delete()
@@ -648,106 +757,81 @@ async function removeImage(index: number) {
     );
   }
 
-async function deleteProduct() {
-  if (!product) {
-    return;
-  }
-
-  setDeleting(true);
-
-  try {
-    // -------------------------------------------------------
-    // Get admin session
-    // -------------------------------------------------------
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error(
-        "Your admin session has expired. Please sign in again.",
-      );
+  async function deleteProduct() {
+    if (!product) {
+      return;
     }
 
-    // -------------------------------------------------------
-    // Delete all product images from Cloudinary
-    // -------------------------------------------------------
+    setDeleting(true);
 
-    const productImages = product.images ?? [];
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    for (const imageUrl of productImages) {
-      try {
-        await deleteCloudinaryImage(
-  imageUrl,
-  session.access_token,
-);
-      } catch (imageError) {
-        console.error(
-          "Failed to delete product image from Cloudinary:",
-          imageUrl,
-          imageError,
-        );
-
+      if (!session?.access_token) {
         throw new Error(
-          "One or more product images could not be deleted from Cloudinary. The product was not deleted.",
+          "Your admin session has expired. Please sign in again.",
         );
       }
+
+      const productImages = product.images ?? [];
+
+      for (const imageUrl of productImages) {
+        try {
+          await deleteCloudinaryImage(imageUrl, session.access_token);
+        } catch (imageError) {
+          console.error(
+            "Failed to delete product image from Cloudinary:",
+            imageUrl,
+            imageError,
+          );
+
+          throw new Error(
+            "One or more product images could not be deleted from Cloudinary. The product was not deleted.",
+          );
+        }
+      }
+
+      const { error: categoryError } = await supabase
+        .from("product_categories")
+        .delete()
+        .eq("product_id", product.id);
+
+      if (categoryError) {
+        throw categoryError;
+      }
+
+      const { error: productError } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", product.id);
+
+      if (productError) {
+        throw productError;
+      }
+
+      Alert.alert(
+        "Product deleted",
+        "The product and its Cloudinary images have been deleted.",
+        [
+          {
+            text: "OK",
+            onPress: () => router.replace("/admin/products"),
+          },
+        ],
+      );
+    } catch (error) {
+      console.error("Delete product error:", error);
+
+      Alert.alert(
+        "Delete failed",
+        error instanceof Error ? error.message : "Failed to delete product.",
+      );
+    } finally {
+      setDeleting(false);
     }
-
-    // -------------------------------------------------------
-    // Delete product-category links first
-    // -------------------------------------------------------
-
-    const { error: categoryError } = await supabase
-      .from("product_categories")
-      .delete()
-      .eq("product_id", product.id);
-
-    if (categoryError) {
-      throw categoryError;
-    }
-
-    // -------------------------------------------------------
-    // Delete product from Supabase
-    // -------------------------------------------------------
-
-    const { error: productError } = await supabase
-      .from("products")
-      .delete()
-      .eq("id", product.id);
-
-    if (productError) {
-      throw productError;
-    }
-
-    // -------------------------------------------------------
-    // Success
-    // -------------------------------------------------------
-
-    Alert.alert(
-      "Product deleted",
-      "The product and its Cloudinary images have been deleted.",
-      [
-        {
-          text: "OK",
-          onPress: () => router.replace("/admin/products"),
-        },
-      ],
-    );
-  } catch (error) {
-    console.error("Delete product error:", error);
-
-    Alert.alert(
-      "Delete failed",
-      error instanceof Error
-        ? error.message
-        : "Failed to delete product.",
-    );
-  } finally {
-    setDeleting(false);
   }
-}
 
   // -------------------------------------------------------
   // DISPLAY TOGGLE
@@ -765,7 +849,7 @@ async function deleteProduct() {
   // -------------------------------------------------------
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={[ "bottom"]}>
+    <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -848,26 +932,57 @@ async function deleteProduct() {
             <Text style={styles.secondaryButtonText}>+ Choose Images</Text>
           </Pressable>
 
-          {images.length > 0 && (
-            <View style={styles.list}>
-              {images.map((url, index) => (
-                <View key={`${url}-${index}`} style={styles.listItem}>
-                  <View style={styles.listItemContent}>
-                    <Text style={styles.listItemTitle} numberOfLines={1}>
-                      Image {index + 1}
-                    </Text>
+          <Pressable
+            style={[
+              styles.secondaryButton,
+              aiAnalyzing && styles.disabledButton,
+            ]}
+            onPress={analyzeProductWithAI}
+            disabled={aiAnalyzing || saving || deleting || images.length === 0}
+          >
+            {aiAnalyzing ? (
+              <View style={styles.aiButtonContent}>
+                <ActivityIndicator size="small" color="#6d5630" />
+                <Text style={styles.secondaryButtonText}>Analyzing...</Text>
+              </View>
+            ) : (
+              <Text style={styles.secondaryButtonText}>✨ Fill with AI</Text>
+            )}
+          </Pressable>
 
-                    <Text style={styles.listItemUrl} numberOfLines={2}>
-                      {url}
-                    </Text>
+          <Text style={styles.helper}>
+            Select a product image first. AI will suggest the product name,
+            description, keywords, size and category.
+          </Text>
+
+          {images.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.imagePreviewRow}
+            >
+              {images.map((url, index) => (
+                <View key={`${url}-${index}`} style={styles.imagePreviewCard}>
+                  <Image
+                    source={{ uri: url }}
+                    style={styles.productImage}
+                    contentFit="cover"
+                    transition={150}
+                  />
+
+                  <View style={styles.imageNumberBadge}>
+                    <Text style={styles.imageNumberText}>{index + 1}</Text>
                   </View>
 
-                  <Pressable onPress={() => removeImage(index)}>
-                    <Text style={styles.removeText}>Remove</Text>
+                  <Pressable
+                    onPress={() => removeImage(index)}
+                    style={styles.imageRemoveButton}
+                  >
+                    <Text style={styles.imageRemoveText}>Remove</Text>
                   </Pressable>
                 </View>
               ))}
-            </View>
+            </ScrollView>
           )}
 
           <Text style={styles.helper}>
@@ -902,34 +1017,40 @@ async function deleteProduct() {
           </View>
 
           {availableCategories.length > 0 ? (
-            <View style={styles.categoryList}>
-              {availableCategories.map((category) => {
-                const selected = categoryIds.includes(category.id);
+            <View style={styles.categoryScrollContainer}>
+              <ScrollView
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+                contentContainerStyle={styles.categoryList}
+              >
+                {availableCategories.map((category) => {
+                  const selected = categoryIds.includes(category.id);
 
-                return (
-                  <Pressable
-                    key={category.id}
-                    style={[
-                      styles.categoryItem,
-                      selected && styles.categoryItemSelected,
-                    ]}
-                    onPress={() => toggleCategory(category.id)}
-                  >
-                    <View
+                  return (
+                    <Pressable
+                      key={category.id}
                       style={[
-                        styles.checkbox,
-                        selected && styles.checkboxSelected,
+                        styles.categoryItem,
+                        selected && styles.categoryItemSelected,
                       ]}
+                      onPress={() => toggleCategory(category.id)}
                     >
-                      {selected ? (
-                        <Text style={styles.checkmark}>✓</Text>
-                      ) : null}
-                    </View>
+                      <View
+                        style={[
+                          styles.checkbox,
+                          selected && styles.checkboxSelected,
+                        ]}
+                      >
+                        {selected ? (
+                          <Text style={styles.checkmark}>✓</Text>
+                        ) : null}
+                      </View>
 
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                  </Pressable>
-                );
-              })}
+                      <Text style={styles.categoryName}>{category.name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
           ) : (
             <Text style={styles.helper}>No categories yet.</Text>
@@ -1346,6 +1467,79 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#6d5630",
   },
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  aiButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  // -------------------------------------------------------
+  // IMAGE PREVIEWS
+  // -------------------------------------------------------
+
+  imagePreviewRow: {
+    gap: 12,
+    paddingVertical: 4,
+    paddingRight: 4,
+    marginBottom: 10,
+  },
+
+  imagePreviewCard: {
+    width: 145,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e0ddd7",
+    backgroundColor: "#faf8f3",
+    padding: 7,
+  },
+
+  productImage: {
+    width: 129,
+    height: 129,
+    borderRadius: 10,
+    backgroundColor: "#eeeae2",
+  },
+
+  imageNumberBadge: {
+    position: "absolute",
+    top: 13,
+    left: 13,
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: "rgba(41,40,36,0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  imageNumberText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  imageRemoveButton: {
+    minHeight: 32,
+    marginTop: 7,
+    borderRadius: 8,
+    backgroundColor: "#fff1f0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  imageRemoveText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#b42318",
+  },
+
+  // -------------------------------------------------------
+  // GENERAL LIST
+  // -------------------------------------------------------
 
   list: {
     gap: 8,
@@ -1386,6 +1580,10 @@ const styles = StyleSheet.create({
     color: "#b42318",
   },
 
+  // -------------------------------------------------------
+  // CATEGORIES
+  // -------------------------------------------------------
+
   categoryCreateRow: {
     flexDirection: "row",
     gap: 8,
@@ -1420,7 +1618,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  categoryScrollContainer: {
+    height: 230,
+    borderWidth: 1,
+    borderColor: "#e0ddd7",
+    borderRadius: 12,
+    backgroundColor: "#faf8f3",
+    overflow: "hidden",
+  },
+
   categoryList: {
+    padding: 8,
     gap: 8,
   },
 
@@ -1432,6 +1640,7 @@ const styles = StyleSheet.create({
     borderColor: "#e0ddd7",
     borderRadius: 11,
     paddingHorizontal: 12,
+    backgroundColor: "#ffffff",
   },
 
   categoryItemSelected: {
@@ -1467,6 +1676,10 @@ const styles = StyleSheet.create({
     color: "#403d38",
   },
 
+  // -------------------------------------------------------
+  // SWITCHES
+  // -------------------------------------------------------
+
   switchRow: {
     minHeight: 64,
     flexDirection: "row",
@@ -1493,6 +1706,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: "#777169",
   },
+
+  // -------------------------------------------------------
+  // ACTIONS
+  // -------------------------------------------------------
 
   actions: {
     marginTop: 5,

@@ -3,18 +3,18 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { STORE } from "@/constants/store";
 import { notifyCartChanged, supabase } from "@/lib/supabase";
-import { Alert } from "react-native";
+
 
 type DisplaySettings = {
   price?: boolean;
@@ -131,7 +131,12 @@ export default function ProductDetailScreen() {
         width: productData.width == null ? null : Number(productData.width),
         depth: productData.depth == null ? null : Number(productData.depth),
         images: Array.isArray(productData.images)
-          ? (productData.images as string[])
+          ? (productData.images as unknown[])
+              .filter(
+                (image): image is string =>
+                  typeof image === "string" && image.trim().length > 0,
+              )
+              .map((image) => image.trim())
           : [],
         video_urls: Array.isArray(productData.video_urls)
           ? (productData.video_urls as string[])
@@ -430,7 +435,11 @@ export default function ProductDetailScreen() {
               <Image
                 source={{ uri: currentImage }}
                 style={styles.mainImage}
-                resizeMode="contain"
+                contentFit="contain"
+                transition={150}
+                onError={() => {
+                  console.log("Product image failed:", currentImage);
+                }}
               />
             ) : (
               <View style={styles.noImage}>
@@ -457,7 +466,8 @@ export default function ProductDetailScreen() {
                   <Image
                     source={{ uri: image }}
                     style={styles.thumbnail}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    transition={150}
                   />
                 </Pressable>
               ))}
@@ -493,7 +503,8 @@ export default function ProductDetailScreen() {
                     <Image
                       source={{ uri: category.image_url }}
                       style={styles.categoryImage}
-                      resizeMode="cover"
+                      contentFit="cover"
+                      transition={150}
                     />
                   ) : null}
 

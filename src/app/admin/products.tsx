@@ -1,8 +1,7 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
+  ActivityIndicator,  
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { STORE } from "@/constants/store";
@@ -42,7 +42,8 @@ function ProductThumbnail({ uri }: { uri: string | null }) {
     <Image
       source={{ uri }}
       style={styles.productImage}
-      resizeMode="cover"
+      contentFit="cover"
+       transition={150}
       onError={() => setFailed(true)}
     />
   );
