@@ -115,7 +115,7 @@ export default function CheckoutScreen() {
     try {
       setLoading(true);
 
-      console.log("🟢 CHECKOUT loadCheckout() STARTED");
+      //console.log("🟢 CHECKOUT loadCheckout() STARTED");
 
       /* -----------------------------------------------------
          Current user
@@ -130,11 +130,7 @@ export default function CheckoutScreen() {
         throw userError;
       }
 
-      console.log(
-        "👤 CHECKOUT USER:",
-        user?.id,
-        user?.email,
-      );
+      //console.log(        "👤 CHECKOUT USER:",        user?.id,        user?.email,      );
 
       if (!user) {
         router.replace("/auth/login");
@@ -207,10 +203,7 @@ export default function CheckoutScreen() {
       const loadedProfile =
         profileResult.data as Profile | null;
 
-      console.log(
-        "✅ CHECKOUT PROFILE:",
-        loadedProfile,
-      );
+      //console.log(        "✅ CHECKOUT PROFILE:",        loadedProfile,      );
 
       setProfile(loadedProfile);
 
@@ -293,9 +286,7 @@ export default function CheckoutScreen() {
       }
 
       if (!cartResult.data) {
-        console.log(
-          "🛒 CHECKOUT: No cart found",
-        );
+        //console.log(          "🛒 CHECKOUT: No cart found",        );
 
         setItems([]);
         return;
@@ -419,10 +410,7 @@ export default function CheckoutScreen() {
           },
         );
 
-      console.log(
-        "✅ CHECKOUT CART ITEMS:",
-        formattedItems.length,
-      );
+      //console.log(        "✅ CHECKOUT CART ITEMS:",        formattedItems.length,      );
 
       setItems(formattedItems);
     } catch (error) {
@@ -438,9 +426,7 @@ export default function CheckoutScreen() {
     } finally {
       setLoading(false);
 
-      console.log(
-        "🔵 CHECKOUT loadCheckout() FINISHED",
-      );
+      //console.log(        "🔵 CHECKOUT loadCheckout() FINISHED",      );
     }
   }
 
@@ -497,9 +483,7 @@ export default function CheckoutScreen() {
         return false;
       }
 
-      console.log(
-        "💾 Saving checkout address to profile...",
-      );
+      //console.log(        "💾 Saving checkout address to profile...",      );
 
       const { error } = await supabase
         .from("profiles")
@@ -525,9 +509,7 @@ export default function CheckoutScreen() {
         throw error;
       }
 
-      console.log(
-        "✅ CHECKOUT PROFILE ADDRESS SAVED",
-      );
+      //console.log(        "✅ CHECKOUT PROFILE ADDRESS SAVED",      );
 
       setProfile((current) => ({
         ...(current ?? {
@@ -592,7 +574,7 @@ export default function CheckoutScreen() {
     try {
       setPlacingOrder(true);
 
-      console.log("🟢 MOBILE PLACE ORDER STARTED");
+      //console.log("🟢 MOBILE PLACE ORDER STARTED");
 
       /* -----------------------------------------------------
          Current authenticated user/session
@@ -617,10 +599,7 @@ export default function CheckoutScreen() {
         return;
       }
 
-      console.log(
-        "✅ MOBILE ORDER SESSION FOUND",
-        session.user.id,
-      );
+      //console.log(        "✅ MOBILE ORDER SESSION FOUND",        session.user.id,      );
 
       /* -----------------------------------------------------
          Validate address
@@ -694,10 +673,7 @@ export default function CheckoutScreen() {
         );
       }
 
-      console.log(
-        "🌐 MOBILE ORDER API:",
-        `${apiBaseUrl}/api/orders`,
-      );
+      //console.log(        "🌐 MOBILE ORDER API:",        `${apiBaseUrl}/api/orders`,      );
 
       /* -----------------------------------------------------
          Create order through the deployed web API
@@ -735,15 +711,12 @@ export default function CheckoutScreen() {
 
       const responseText = await response.text();
 
-      console.log(
-        "📦 MOBILE ORDER API STATUS:",
-        response.status,
-      );
+      //console.log(        "📦 MOBILE ORDER API STATUS:",        response.status,      );
 
-      console.log(
-        "📦 MOBILE ORDER API RESPONSE:",
-        responseText,
-      );
+      //console.log(
+      //  "📦 MOBILE ORDER API RESPONSE:",
+      //  responseText,
+      //);
 
       let result: {
         success?: boolean;
@@ -785,10 +758,7 @@ export default function CheckoutScreen() {
         );
       }
 
-      console.log(
-        "🎉 MOBILE ORDER CREATED:",
-        result.order_number,
-      );
+      //console.log(        "🎉 MOBILE ORDER CREATED:",        result.order_number,      );
 
       /* -----------------------------------------------------
          Go to mobile Order Success
@@ -818,9 +788,7 @@ export default function CheckoutScreen() {
     } finally {
       setPlacingOrder(false);
 
-      console.log(
-        "🔵 MOBILE PLACE ORDER FINISHED",
-      );
+      //console.log(        "🔵 MOBILE PLACE ORDER FINISHED",      );
     }
   }
   /* =========================================================

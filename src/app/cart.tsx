@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 
-import { supabase } from "@/lib/supabase";
+import { notifyCartChanged, supabase } from "@/lib/supabase";
 import { STORE } from "@/constants/store";
 
 type CartProduct = {
@@ -67,12 +67,11 @@ export default function CartScreen() {
       // Find user's cart
       // ---------------------------------------------------------
 
-      const { data: cart, error: cartError } =
-        await supabase
-          .from("carts")
-          .select("id")
-          .eq("user_id", user.id)
-          .maybeSingle();
+      const { data: cart, error: cartError } = await supabase
+        .from("carts")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
       if (cartError) {
         throw cartError;
@@ -87,11 +86,10 @@ export default function CartScreen() {
       // Get cart items + product information
       // ---------------------------------------------------------
 
-      const { data: cartItems, error: itemsError } =
-        await supabase
-          .from("cart_items")
-          .select(
-            `
+      const { data: cartItems, error: itemsError } = await supabase
+        .from("cart_items")
+        .select(
+          `
               id,
               quantity,
               product_id,
@@ -105,70 +103,50 @@ export default function CartScreen() {
                 available_for_sale
               )
             `,
-          )
-          .eq("cart_id", cart.id)
-          .order("created_at", {
-            ascending: true,
-          });
+        )
+        .eq("cart_id", cart.id)
+        .order("created_at", {
+          ascending: true,
+        });
 
       if (itemsError) {
         throw itemsError;
       }
 
-      const formattedItems: CartItem[] =
-        (cartItems ?? [])
-          .flatMap((item) => {
-            const product = item.products as
-              | CartProduct
-              | CartProduct[]
-              | null;
+      const formattedItems: CartItem[] = (cartItems ?? []).flatMap((item) => {
+        const product = item.products as CartProduct | CartProduct[] | null;
 
-            const actualProduct = Array.isArray(product)
-              ? product[0]
-              : product;
+        const actualProduct = Array.isArray(product) ? product[0] : product;
 
-            if (!actualProduct) {
-              return [];
-            }
+        if (!actualProduct) {
+          return [];
+        }
 
-            return [
-              {
-                id: item.id,
-                quantity: item.quantity,
-                product: {
-                  ...actualProduct,
-                  price: Number(
-                    actualProduct.price,
-                  ),
-                  sale_price:
-                    actualProduct.sale_price == null
-                      ? null
-                      : Number(
-                          actualProduct.sale_price,
-                        ),
-                  stock:
-                    actualProduct.stock ?? 0,
-                  images: Array.isArray(
-                    actualProduct.images,
-                  )
-                    ? actualProduct.images
-                    : [],
-                },
-              },
-            ];
-          });
+        return [
+          {
+            id: item.id,
+            quantity: item.quantity,
+            product: {
+              ...actualProduct,
+              price: Number(actualProduct.price),
+              sale_price:
+                actualProduct.sale_price == null
+                  ? null
+                  : Number(actualProduct.sale_price),
+              stock: actualProduct.stock ?? 0,
+              images: Array.isArray(actualProduct.images)
+                ? actualProduct.images
+                : [],
+            },
+          },
+        ];
+      });
 
       setItems(formattedItems);
     } catch (error) {
-      console.error(
-        "Cart loading error:",
-        error,
-      );
+      console.error("Cart loading error:", error);
 
-      Alert.alert(
-        "Unable to load cart",
-        "Please try again.",
-      );
+      Alert.alert("Unable to load cart", "Please try again.");
     } finally {
       setLoading(false);
     }
@@ -178,15 +156,11 @@ export default function CartScreen() {
   // Update quantity
   // -------------------------------------------------------------
 
-  async function updateQuantity(
-    item: CartItem,
-    newQuantity: number,
-  ) {
+  async function updateQuantity(item: CartItem, newQuantity: number) {
     if (updatingId) return;
 
     const isPreBooking =
-      !item.product.available_for_sale &&
-      item.product.stock <= 0;
+      !item.product.available_for_sale && item.product.stock <= 0;
 
     if (newQuantity < 1) {
       return;
@@ -198,16 +172,11 @@ export default function CartScreen() {
      * Pre-booking products intentionally have stock = 0,
      * so they do not have this restriction.
      */
-    if (
-      !isPreBooking &&
-      newQuantity > item.product.stock
-    ) {
+    if (!isPreBooking && newQuantity > item.product.stock) {
       Alert.alert(
         "Not enough stock",
         `Only ${item.product.stock} item${
-          item.product.stock === 1
-            ? ""
-            : "s"
+          item.product.stock === 1 ? "" : "s"
         } available.`,
       );
 
@@ -228,7 +197,7 @@ export default function CartScreen() {
       if (error) {
         throw error;
       }
-
+      notifyCartChanged();
       setItems((currentItems) =>
         currentItems.map((currentItem) =>
           currentItem.id === item.id
@@ -240,15 +209,9 @@ export default function CartScreen() {
         ),
       );
     } catch (error) {
-      console.error(
-        "Quantity update error:",
-        error,
-      );
+      console.error("Quantity update error:", error);
 
-      Alert.alert(
-        "Unable to update cart",
-        "Please try again.",
-      );
+      Alert.alert("Unable to update cart", "Please try again.");
     } finally {
       setUpdatingId(null);
     }
@@ -258,9 +221,7 @@ export default function CartScreen() {
   // Remove item
   // -------------------------------------------------------------
 
-  async function removeItem(
-    item: CartItem,
-  ) {
+  async function removeItem(item: CartItem) {
     if (updatingId) return;
 
     try {
@@ -274,23 +235,14 @@ export default function CartScreen() {
       if (error) {
         throw error;
       }
-
+      notifyCartChanged();
       setItems((currentItems) =>
-        currentItems.filter(
-          (currentItem) =>
-            currentItem.id !== item.id,
-        ),
+        currentItems.filter((currentItem) => currentItem.id !== item.id),
       );
     } catch (error) {
-      console.error(
-        "Remove cart item error:",
-        error,
-      );
+      console.error("Remove cart item error:", error);
 
-      Alert.alert(
-        "Unable to remove item",
-        "Please try again.",
-      );
+      Alert.alert("Unable to remove item", "Please try again.");
     } finally {
       setUpdatingId(null);
     }
@@ -305,9 +257,7 @@ export default function CartScreen() {
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" />
 
-        <Text style={styles.loadingText}>
-          Loading cart...
-        </Text>
+        <Text style={styles.loadingText}>Loading cart...</Text>
       </SafeAreaView>
     );
   }
@@ -320,30 +270,19 @@ export default function CartScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>
-            🛒
-          </Text>
+          <Text style={styles.emptyIcon}>🛒</Text>
 
-          <Text style={styles.emptyTitle}>
-            Your cart is empty
-          </Text>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
 
           <Text style={styles.emptyText}>
-            Add something beautiful to your
-            cart and come back here.
+            Add something beautiful to your cart and come back here.
           </Text>
 
           <Pressable
             style={styles.continueButton}
-            onPress={() =>
-              router.push("/explore")
-            }
+            onPress={() => router.push("/explore")}
           >
-            <Text
-              style={styles.continueButtonText}
-            >
-              Continue shopping
-            </Text>
+            <Text style={styles.continueButtonText}>Continue shopping</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -354,26 +293,16 @@ export default function CartScreen() {
   // Totals
   // -------------------------------------------------------------
 
-  const subtotal = items.reduce(
-    (total, item) => {
-      const unitPrice =
-        item.product.sale_price !== null
-          ? item.product.sale_price
-          : item.product.price;
+  const subtotal = items.reduce((total, item) => {
+    const unitPrice =
+      item.product.sale_price !== null
+        ? item.product.sale_price
+        : item.product.price;
 
-      return (
-        total +
-        unitPrice * item.quantity
-      );
-    },
-    0,
-  );
+    return total + unitPrice * item.quantity;
+  }, 0);
 
-  const itemCount = items.reduce(
-    (total, item) =>
-      total + item.quantity,
-    0,
-  );
+  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 
   // -------------------------------------------------------------
   // Render
@@ -390,15 +319,10 @@ export default function CartScreen() {
            ===================================================== */}
 
         <View style={styles.titleRow}>
-          <Text style={styles.title}>
-            Your Cart
-          </Text>
+          <Text style={styles.title}>Your Cart</Text>
 
           <Text style={styles.itemCount}>
-            {itemCount}{" "}
-            {itemCount === 1
-              ? "item"
-              : "items"}
+            {itemCount} {itemCount === 1 ? "item" : "items"}
           </Text>
         </View>
 
@@ -408,40 +332,25 @@ export default function CartScreen() {
 
         <View style={styles.items}>
           {items.map((item) => {
-            const product =
-              item.product;
+            const product = item.product;
 
             const isPreBooking =
-              !product.available_for_sale &&
-              product.stock <= 0;
+              !product.available_for_sale && product.stock <= 0;
 
             const unitPrice =
-              product.sale_price !== null
-                ? product.sale_price
-                : product.price;
+              product.sale_price !== null ? product.sale_price : product.price;
 
-            const lineTotal =
-              unitPrice *
-              item.quantity;
+            const lineTotal = unitPrice * item.quantity;
 
-            const image =
-              product.images?.[0] ?? null;
+            const image = product.images?.[0] ?? null;
 
-            const busy =
-              updatingId === item.id;
+            const busy = updatingId === item.id;
 
             return (
-              <View
-                key={item.id}
-                style={styles.cartItem}
-              >
+              <View key={item.id} style={styles.cartItem}>
                 {/* Product image */}
 
-                <View
-                  style={
-                    styles.imageContainer
-                  }
-                >
+                <View style={styles.imageContainer}>
                   {image ? (
                     <Image
                       source={{
@@ -451,159 +360,63 @@ export default function CartScreen() {
                       resizeMode="cover"
                     />
                   ) : (
-                    <View
-                      style={
-                        styles.noImage
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.noImageText
-                        }
-                      >
-                        No image
-                      </Text>
+                    <View style={styles.noImage}>
+                      <Text style={styles.noImageText}>No image</Text>
                     </View>
                   )}
                 </View>
 
                 {/* Product details */}
 
-                <View
-                  style={
-                    styles.itemDetails
-                  }
-                >
-                  <Text
-                    style={
-                      styles.productName
-                    }
-                    numberOfLines={2}
-                  >
+                <View style={styles.itemDetails}>
+                  <Text style={styles.productName} numberOfLines={2}>
                     {product.name}
                   </Text>
 
                   {isPreBooking && (
-                    <Text
-                      style={
-                        styles.preBooking
-                      }
-                    >
-                      Pre-booking
-                    </Text>
+                    <Text style={styles.preBooking}>Pre-booking</Text>
                   )}
 
-                  <View
-                    style={
-                      styles.priceRow
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.unitPrice
-                      }
-                    >
-                      CHF{" "}
-                      {unitPrice.toFixed(2)}
+                  <View style={styles.priceRow}>
+                    <Text style={styles.unitPrice}>
+                      CHF {unitPrice.toFixed(2)}
                     </Text>
 
-                    {product.sale_price !==
-                      null && (
-                      <Text
-                        style={
-                          styles.originalPrice
-                        }
-                      >
-                        CHF{" "}
-                        {product.price.toFixed(
-                          2,
-                        )}
+                    {product.sale_price !== null && (
+                      <Text style={styles.originalPrice}>
+                        CHF {product.price.toFixed(2)}
                       </Text>
                     )}
                   </View>
 
                   {/* Quantity */}
 
-                  <View
-                    style={
-                      styles.bottomRow
-                    }
-                  >
-                    <View
-                      style={
-                        styles.quantityControl
-                      }
-                    >
+                  <View style={styles.bottomRow}>
+                    <View style={styles.quantityControl}>
                       <Pressable
-                        disabled={
-                          busy ||
-                          item.quantity <= 1
-                        }
-                        onPress={() =>
-                          updateQuantity(
-                            item,
-                            item.quantity -
-                              1,
-                          )
-                        }
-                        style={
-                          styles.quantityButton
-                        }
+                        disabled={busy || item.quantity <= 1}
+                        onPress={() => updateQuantity(item, item.quantity - 1)}
+                        style={styles.quantityButton}
                       >
-                        <Text
-                          style={
-                            styles.quantityButtonText
-                          }
-                        >
-                          −
-                        </Text>
+                        <Text style={styles.quantityButtonText}>−</Text>
                       </Pressable>
 
-                      <Text
-                        style={
-                          styles.quantityText
-                        }
-                      >
-                        {item.quantity}
-                      </Text>
+                      <Text style={styles.quantityText}>{item.quantity}</Text>
 
                       <Pressable
                         disabled={
                           busy ||
-                          (!isPreBooking &&
-                            item.quantity >=
-                              product.stock)
+                          (!isPreBooking && item.quantity >= product.stock)
                         }
-                        onPress={() =>
-                          updateQuantity(
-                            item,
-                            item.quantity +
-                              1,
-                          )
-                        }
-                        style={
-                          styles.quantityButton
-                        }
+                        onPress={() => updateQuantity(item, item.quantity + 1)}
+                        style={styles.quantityButton}
                       >
-                        <Text
-                          style={
-                            styles.quantityButtonText
-                          }
-                        >
-                          +
-                        </Text>
+                        <Text style={styles.quantityButtonText}>+</Text>
                       </Pressable>
                     </View>
 
-                    <Text
-                      style={
-                        styles.lineTotal
-                      }
-                    >
-                      CHF{" "}
-                      {lineTotal.toFixed(
-                        2,
-                      )}
+                    <Text style={styles.lineTotal}>
+                      CHF {lineTotal.toFixed(2)}
                     </Text>
                   </View>
 
@@ -611,20 +424,10 @@ export default function CartScreen() {
 
                   <Pressable
                     disabled={busy}
-                    onPress={() =>
-                      removeItem(item)
-                    }
-                    style={
-                      styles.removeButton
-                    }
+                    onPress={() => removeItem(item)}
+                    style={styles.removeButton}
                   >
-                    <Text
-                      style={
-                        styles.removeText
-                      }
-                    >
-                      Remove
-                    </Text>
+                    <Text style={styles.removeText}>Remove</Text>
                   </Pressable>
                 </View>
               </View>
@@ -637,59 +440,28 @@ export default function CartScreen() {
            ===================================================== */}
 
         <View style={styles.summary}>
-          <View
-            style={styles.summaryRow}
-          >
-            <Text
-              style={styles.summaryLabel}
-            >
-              Subtotal
-            </Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
 
-            <Text
-              style={styles.summaryValue}
-            >
-              CHF {subtotal.toFixed(2)}
-            </Text>
+            <Text style={styles.summaryValue}>CHF {subtotal.toFixed(2)}</Text>
           </View>
 
-          <Text
-            style={styles.shippingNote}
-          >
-            Shipping and payment options
-            will be shown at checkout.
+          <Text style={styles.shippingNote}>
+            Shipping and payment options will be shown at checkout.
           </Text>
 
           <Pressable
             style={styles.checkoutButton}
-            onPress={() =>
-              router.push(
-                "/checkout" as any,
-              )
-            }
+            onPress={() => router.push("/checkout" as any)}
           >
-            <Text
-              style={
-                styles.checkoutButtonText
-              }
-            >
-              Proceed to checkout
-            </Text>
+            <Text style={styles.checkoutButtonText}>Proceed to checkout</Text>
           </Pressable>
 
           <Pressable
             style={styles.continueLink}
-            onPress={() =>
-              router.push("/explore")
-            }
+            onPress={() => router.push("/explore")}
           >
-            <Text
-              style={
-                styles.continueLinkText
-              }
-            >
-              ← Continue shopping
-            </Text>
+            <Text style={styles.continueLinkText}>← Continue shopping</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -704,8 +476,7 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor:
-      STORE.colors.background,
+    backgroundColor: STORE.colors.background,
   },
 
   center: {
@@ -713,8 +484,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    backgroundColor:
-      STORE.colors.background,
+    backgroundColor: STORE.colors.background,
   },
 
   loadingText: {
@@ -760,8 +530,7 @@ const styles = StyleSheet.create({
 
   cartItem: {
     flexDirection: "row",
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
     borderWidth: 1,
     borderColor: "#e1ddd5",
     borderRadius: 16,
@@ -828,8 +597,7 @@ const styles = StyleSheet.create({
   originalPrice: {
     fontSize: 12,
     color: "#999",
-    textDecorationLine:
-      "line-through",
+    textDecorationLine: "line-through",
   },
 
   bottomRow: {
@@ -894,8 +662,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#dedad2",
-    backgroundColor:
-      "rgba(255,255,255,0.55)",
+    backgroundColor: "rgba(255,255,255,0.55)",
   },
 
   summaryRow: {

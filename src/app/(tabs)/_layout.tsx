@@ -34,6 +34,28 @@ export default function TabsLayout() {
           renderingMode="template"
         />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="reviews">
+        <NativeTabs.Trigger.Label>
+          Reviews
+        </NativeTabs.Trigger.Label>
+
+        <NativeTabs.Trigger.Icon
+          src={require("@/assets/images/tabIcons/reviews.png")}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="social">
+        <NativeTabs.Trigger.Label>
+          Social
+        </NativeTabs.Trigger.Label>
+
+        <NativeTabs.Trigger.Icon
+          src={require("@/assets/images/tabIcons/social.png")}
+          renderingMode="template"
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

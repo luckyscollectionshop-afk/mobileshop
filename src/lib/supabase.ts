@@ -60,3 +60,9 @@ export const supabase = createClient(
     },
   },
 );
+
+export const cartEvents = new EventTarget();
+
+export function notifyCartChanged() {
+  cartEvents.dispatchEvent(new Event("cartChanged"));
+}

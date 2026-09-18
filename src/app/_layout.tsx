@@ -43,7 +43,7 @@ function useNotificationObserver() {
       if (!mounted) {
         return;
       }
-
+      //console.log("Handling notification:", notification);
       const data = notification.request.content.data as
         | {
             order_id?: unknown;
@@ -52,7 +52,7 @@ function useNotificationObserver() {
           }
         | undefined;
 
-      console.log("Notification data:", data);
+      //console.log("Notification data:", data);
 
       /*
        * -----------------------------------------------------
@@ -71,12 +71,7 @@ function useNotificationObserver() {
         const isAdminNotification =
           typeof data?.type === "string" && data.type.startsWith("admin_");
 
-        console.log(
-          isAdminNotification
-            ? "Opening admin order:"
-            : "Opening mobile order:",
-          data.order_id,
-        );
+        //console.log(          isAdminNotification            ? "Opening admin order:"           : "Opening mobile order:",          data.order_id,       );
 
         setTimeout(() => {
           if (!mounted) {
@@ -112,7 +107,7 @@ function useNotificationObserver() {
        */
 
       if (typeof data?.product_id === "string" && data.product_id.length > 0) {
-        console.log("Opening mobile product:", data.product_id);
+       // console.log("Opening mobile product:", data.product_id);
 
         setTimeout(() => {
           if (!mounted) {
@@ -138,7 +133,7 @@ function useNotificationObserver() {
      */
     const responseSubscription =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log("Notification tapped.");
+        //console.log("Notification tapped.");
 
         handleNotification(response.notification);
       });
@@ -159,7 +154,7 @@ function useNotificationObserver() {
           return;
         }
 
-        console.log("App launched from notification.");
+        //console.log("App launched from notification.");
 
         handleNotification(response.notification);
 

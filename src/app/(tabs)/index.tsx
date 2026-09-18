@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   Image,
   Pressable,
-  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +15,10 @@ import { VideoView, useVideoPlayer } from "expo-video";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { STORE } from "@/constants/store";
+
+/* =========================================================
+   TYPES
+   ========================================================= */
 
 type HeroMedia = {
   url: string;
@@ -53,12 +57,29 @@ type HomepageStrip = {
   type: "category" | "all" | "prebooking";
 };
 
+/* =========================================================
+   CONSTANTS
+   ========================================================= */
+
 const ALL_PRODUCTS_ID = "__all__";
 const PREBOOKING_ID = "__prebooking__";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
+
 const HERO_WIDTH = SCREEN_WIDTH - 40;
 const HERO_HEIGHT = 360;
+
+const PRODUCT_CARD_WIDTH = 155;
+const PRODUCT_GAP = 12;
+const PRODUCT_ITEM_WIDTH = PRODUCT_CARD_WIDTH + PRODUCT_GAP;
+
+/*
+ * Product auto-scroll speed.
+ *
+ * Smaller number = faster.
+ * This is the number of pixels moved on each animation frame.
+ */
+const PRODUCT_SCROLL_SPEED = 0.55;
 
 /* =========================================================
    HERO VIDEO
@@ -82,64 +103,111 @@ function HeroVideo({ url }: { url: string }) {
 }
 
 /* =========================================================
-   HOME
+   HOME SCREEN
    ========================================================= */
 
 export default function HomeScreen() {
+  /* =======================================================
+     STATE
+     ======================================================= */
+
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [homepageStrips, setHomepageStrips] = useState<HomepageStrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  /* =======================================================
+     ROUTER
+     ======================================================= */
+
   const router = useRouter();
+
+  /* =======================================================
+     MAIN PAGE SCROLL
+     ======================================================= */
 
   const scrollViewRef = useRef<ScrollView>(null);
 
-const arrowAnimation = useRef(new Animated.Value(0)).current;
+  /* =======================================================
+     HERO CAROUSEL
+     ======================================================= */
 
-useEffect(() => {
-  const animation = Animated.loop(
-    Animated.sequence([
-      Animated.timing(arrowAnimation, {
-        toValue: 1,
-        duration: 900,
-        useNativeDriver: true,
-      }),
-      Animated.timing(arrowAnimation, {
-        toValue: 0,
-        duration: 900,
-        useNativeDriver: true,
-      }),
-    ]),
+  const heroCarouselRef = useRef<ScrollView>(null);
+
+  const heroAutoScrollTimer = useRef<ReturnType<typeof setInterval> | null>(
+    null,
   );
 
-  animation.start();
+  const heroIndex = useRef(0);
 
-  return () => {
-    animation.stop();
-  };
-}, [arrowAnimation]);
+  /* =======================================================
+     PRODUCT CAROUSELS
+     ======================================================= */
 
-const arrowOpacity = arrowAnimation.interpolate({
-  inputRange: [0, 0.5, 1],
-  outputRange: [0.45, 1, 0.45],
-});
+  const productCarouselRefs = useRef<
+    Record<string, ScrollView | null>
+  >({});
 
-const arrowScale = arrowAnimation.interpolate({
-  inputRange: [0, 0.5, 1],
-  outputRange: [0.9, 1.15, 0.9],
-});
+  /*
+   * Each strip gets its own animation frame.
+   *
+   * This gives us smooth continuous movement rather than
+   * jumping from product to product.
+   */
+  const productAnimationFrames = useRef<
+    Record<string, number | null>
+  >({});
 
-  function scrollToCollection() {
-    scrollViewRef.current?.scrollTo({
-      y: 360,
-      animated: true,
-    });
-  }
+  const productUserScrolling = useRef<Record<string, boolean>>({});
+
+  /* =======================================================
+     BUTTON SHINE ANIMATION
+     ======================================================= */
+
+  const buttonShineAnimation = useRef(new Animated.Value(-1)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1800),
+
+        Animated.timing(buttonShineAnimation, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+
+        Animated.timing(buttonShineAnimation, {
+          toValue: -1,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [buttonShineAnimation]);
+
+  const buttonShineTranslate = buttonShineAnimation.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-120, 120],
+  });
+
+  /* =======================================================
+     LOAD HOME
+     ======================================================= */
 
   useEffect(() => {
     loadHome();
   }, []);
+
+  /* =======================================================
+     LOAD HOMEPAGE DATA
+     ======================================================= */
 
   async function loadHome() {
     try {
@@ -147,16 +215,17 @@ const arrowScale = arrowAnimation.interpolate({
       setError(null);
 
       /* =====================================================
-         1. Load homepage settings
+         1. LOAD HOMEPAGE SETTINGS
          ===================================================== */
 
-      const { data: siteSettings, error: settingsError } = await supabase
-        .from("site_settings")
-        .select(
-          "hero_title, hero_description, hero_image_url, hero_media, homepage_category_ids",
-        )
-        .eq("id", true)
-        .single();
+      const { data: siteSettings, error: settingsError } =
+        await supabase
+          .from("site_settings")
+          .select(
+            "hero_title, hero_description, hero_image_url, hero_media, homepage_category_ids",
+          )
+          .eq("id", true)
+          .single();
 
       if (settingsError) {
         throw settingsError;
@@ -168,15 +237,17 @@ const arrowScale = arrowAnimation.interpolate({
         (siteSettings?.homepage_category_ids as string[] | null) ?? [];
 
       /* =====================================================
-         2. Separate special strips from real categories
+         2. SEPARATE REAL CATEGORIES FROM SPECIAL STRIPS
          ===================================================== */
 
       const categoryIds = homepageStripIds.filter(
-        (id) => id !== ALL_PRODUCTS_ID && id !== PREBOOKING_ID,
+        (id) =>
+          id !== ALL_PRODUCTS_ID &&
+          id !== PREBOOKING_ID,
       );
 
       /* =====================================================
-         3. Load selected categories
+         3. LOAD SELECTED CATEGORIES
          ===================================================== */
 
       const { data: categories, error: categoriesError } =
@@ -193,10 +264,7 @@ const arrowScale = arrowAnimation.interpolate({
       }
 
       /* =====================================================
-         4. Load active products
-         
-         We load all active products because they may be used
-         by ALL PRODUCTS, PREBOOKING, or category strips.
+         4. LOAD ALL ACTIVE PRODUCTS
          ===================================================== */
 
       const { data: allProductsData, error: allProductsError } =
@@ -226,13 +294,15 @@ const arrowScale = arrowAnimation.interpolate({
       const allProducts = (allProductsData ?? []) as Product[];
 
       /* =====================================================
-         5. Sort ALL PRODUCTS by name
+         5. SORT ALL PRODUCTS BY NAME
          ===================================================== */
 
-      allProducts.sort((a, b) => a.name.localeCompare(b.name));
+      allProducts.sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
 
       /* =====================================================
-         6. Load category → product relationships
+         6. LOAD CATEGORY → PRODUCT RELATIONSHIPS
          ===================================================== */
 
       const { data: categoryLinks, error: categoryProductsError } =
@@ -262,39 +332,51 @@ const arrowScale = arrowAnimation.interpolate({
       }
 
       /* =====================================================
-         7. Build products by category
+         7. BUILD PRODUCTS BY CATEGORY
          ===================================================== */
 
-      const productsByCategory = new Map<string, Product[]>();
+      const productsByCategory = new Map<
+        string,
+        Product[]
+      >();
 
       for (const link of categoryLinks ?? []) {
-        const product = link.product as Product | Product[] | null;
+        const product =
+          link.product as Product | Product[] | null;
 
         if (!product) continue;
 
-        const item = Array.isArray(product) ? product[0] : product;
+        const item = Array.isArray(product)
+          ? product[0]
+          : product;
 
         if (!item || !item.active) continue;
 
-        const existing = productsByCategory.get(link.category_id) ?? [];
+        const existing =
+          productsByCategory.get(link.category_id) ?? [];
 
         if (!existing.some((p) => p.id === item.id)) {
           existing.push(item);
         }
 
-        productsByCategory.set(link.category_id, existing);
+        productsByCategory.set(
+          link.category_id,
+          existing,
+        );
       }
 
       /* =====================================================
-         8. Sort category products by name
+         8. SORT CATEGORY PRODUCTS
          ===================================================== */
 
       for (const products of productsByCategory.values()) {
-        products.sort((a, b) => a.name.localeCompare(b.name));
+        products.sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
       }
 
       /* =====================================================
-         9. Build homepage strips in EXACT admin order
+         9. BUILD HOMEPAGE STRIPS
          ===================================================== */
 
       const strips: HomepageStrip[] = [];
@@ -321,9 +403,11 @@ const arrowScale = arrowAnimation.interpolate({
            =================================================== */
 
         if (stripId === PREBOOKING_ID) {
-          const prebookingProducts = allProducts.filter(
-            (product) => product.display_settings?.prebooking === true,
-          );
+          const prebookingProducts =
+            allProducts.filter(
+              (product) =>
+                product.display_settings?.prebooking === true,
+            );
 
           strips.push({
             id: PREBOOKING_ID,
@@ -340,7 +424,9 @@ const arrowScale = arrowAnimation.interpolate({
            NORMAL CATEGORY
            =================================================== */
 
-        const category = (categories ?? []).find((item) => item.id === stripId);
+        const category = (categories ?? []).find(
+          (item) => item.id === stripId,
+        );
 
         if (!category) continue;
 
@@ -348,7 +434,8 @@ const arrowScale = arrowAnimation.interpolate({
           id: category.id,
           name: category.name,
           slug: category.slug,
-          products: productsByCategory.get(category.id) ?? [],
+          products:
+            productsByCategory.get(category.id) ?? [],
           type: "category",
         });
       }
@@ -363,6 +450,343 @@ const arrowScale = arrowAnimation.interpolate({
   }
 
   /* =========================================================
+     HERO MEDIA
+     ========================================================= */
+
+  const heroMedia: HeroMedia[] =
+    Array.isArray(settings?.hero_media)
+      ? settings.hero_media
+      : settings?.hero_image_url
+        ? [
+            {
+              url: settings.hero_image_url,
+              type: "image",
+            },
+          ]
+        : [];
+
+  /* =========================================================
+     HERO AUTO SCROLL
+     ========================================================= */
+
+  function startHeroAutoScroll() {
+    if (heroAutoScrollTimer.current) {
+      clearInterval(heroAutoScrollTimer.current);
+    }
+
+    if (heroMedia.length <= 1) {
+      return;
+    }
+
+    heroAutoScrollTimer.current = setInterval(() => {
+      if (heroMedia.length <= 1) {
+        return;
+      }
+
+      heroIndex.current += 1;
+
+      heroCarouselRef.current?.scrollTo({
+        x:
+          HERO_WIDTH *
+          (heroMedia.length + heroIndex.current),
+        animated: true,
+      });
+    }, 3500);
+  }
+
+  /* =========================================================
+     HERO LOOP HANDLER
+     ========================================================= */
+
+  function handleHeroCarouselEnd(event: any) {
+    const x = event.nativeEvent.contentOffset.x;
+
+    const currentIndex = Math.round(
+      x / HERO_WIDTH,
+    );
+
+    /*
+     * We render:
+     *
+     * [copy 1][copy 2][copy 3]
+     *
+     * We normally stay in copy 2.
+     */
+
+    heroIndex.current =
+      currentIndex - heroMedia.length;
+
+    /* -------------------------------------------------------
+       FIRST COPY → MIDDLE COPY
+       ------------------------------------------------------- */
+
+    if (currentIndex < heroMedia.length) {
+      const newIndex =
+        currentIndex + heroMedia.length;
+
+      heroCarouselRef.current?.scrollTo({
+        x: newIndex * HERO_WIDTH,
+        animated: false,
+      });
+
+      heroIndex.current =
+        newIndex - heroMedia.length;
+    }
+
+    /* -------------------------------------------------------
+       THIRD COPY → MIDDLE COPY
+       ------------------------------------------------------- */
+
+    else if (
+      currentIndex >= heroMedia.length * 2
+    ) {
+      const newIndex =
+        currentIndex - heroMedia.length;
+
+      heroCarouselRef.current?.scrollTo({
+        x: newIndex * HERO_WIDTH,
+        animated: false,
+      });
+
+      heroIndex.current =
+        newIndex - heroMedia.length;
+    }
+  }
+
+  /* =========================================================
+     START HERO AUTO SCROLL WHEN HERO DATA EXISTS
+     ========================================================= */
+
+  useEffect(() => {
+    if (heroMedia.length <= 1) {
+      return;
+    }
+
+    startHeroAutoScroll();
+
+    return () => {
+      if (heroAutoScrollTimer.current) {
+        clearInterval(
+          heroAutoScrollTimer.current,
+        );
+
+        heroAutoScrollTimer.current = null;
+      }
+    };
+  }, [heroMedia.length]);
+
+  /* =========================================================
+     PRODUCT CONTINUOUS AUTO SCROLL
+     ========================================================= */
+
+  function startProductAutoScroll(
+    stripId: string,
+    productCount: number,
+  ) {
+    if (productCount <= 1) {
+      return;
+    }
+
+    stopProductAutoScroll(stripId);
+
+    const animate = () => {
+      const ref =
+        productCarouselRefs.current[stripId];
+
+      if (!ref) {
+        productAnimationFrames.current[stripId] =
+          requestAnimationFrame(animate);
+
+        return;
+      }
+
+      /*
+       * Do not move while the user is touching /
+       * manually scrolling the carousel.
+       */
+
+      if (
+        !productUserScrolling.current[stripId]
+      ) {
+        /*
+         * Use a tiny offset on every animation frame.
+         * This creates a continuous smooth movement.
+         */
+
+        ref.scrollTo({
+          x:
+            getCurrentProductScrollOffset(stripId) +
+            PRODUCT_SCROLL_SPEED,
+          animated: false,
+        });
+      }
+
+      productAnimationFrames.current[stripId] =
+        requestAnimationFrame(animate);
+    };
+
+    productAnimationFrames.current[stripId] =
+      requestAnimationFrame(animate);
+  }
+
+  /* =========================================================
+     PRODUCT CURRENT OFFSET
+     ========================================================= */
+
+  const productScrollOffsets = useRef<
+    Record<string, number>
+  >({});
+
+  function getCurrentProductScrollOffset(
+    stripId: string,
+  ) {
+    return (
+      productScrollOffsets.current[stripId] ?? 0
+    );
+  }
+
+  /* =========================================================
+     PRODUCT SCROLL HANDLER
+     ========================================================= */
+
+  function handleProductScroll(
+    stripId: string,
+    event: any,
+  ) {
+    const x =
+      event.nativeEvent.contentOffset.x;
+
+    productScrollOffsets.current[stripId] = x;
+  }
+
+  /* =========================================================
+     STOP PRODUCT AUTO SCROLL
+     ========================================================= */
+
+  function stopProductAutoScroll(
+    stripId: string,
+  ) {
+    const frame =
+      productAnimationFrames.current[stripId];
+
+    if (frame !== null && frame !== undefined) {
+      cancelAnimationFrame(frame);
+
+      productAnimationFrames.current[stripId] =
+        null;
+    }
+  }
+
+  /* =========================================================
+     PRODUCT INFINITE LOOP
+     ========================================================= */
+
+  function handleProductCarouselEnd(
+    stripId: string,
+    event: any,
+    productCount: number,
+  ) {
+    if (productCount <= 1) {
+      return;
+    }
+
+    const x =
+      event.nativeEvent.contentOffset.x;
+
+    const blockWidth =
+      productCount * PRODUCT_ITEM_WIDTH;
+
+    /*
+     * First copy → middle copy
+     */
+
+    if (x < blockWidth * 0.5) {
+      const newX = x + blockWidth;
+
+      productCarouselRefs.current[
+        stripId
+      ]?.scrollTo({
+        x: newX,
+        animated: false,
+      });
+
+      productScrollOffsets.current[
+        stripId
+      ] = newX;
+    }
+
+    /*
+     * Third copy → middle copy
+     */
+
+    else if (x >= blockWidth * 2.5) {
+      const newX = x - blockWidth;
+
+      productCarouselRefs.current[
+        stripId
+      ]?.scrollTo({
+        x: newX,
+        animated: false,
+      });
+
+      productScrollOffsets.current[
+        stripId
+      ] = newX;
+    }
+  }
+
+  /* =========================================================
+     PRODUCT STRIP LIFECYCLE
+     ========================================================= */
+
+  useEffect(() => {
+    if (homepageStrips.length === 0) {
+      return;
+    }
+
+    /*
+     * Give React Native time to render the ScrollViews
+     * before starting their animation.
+     */
+
+    const timer = setTimeout(() => {
+      homepageStrips.forEach((strip) => {
+        if (strip.products.length > 1) {
+          productScrollOffsets.current[
+            strip.id
+          ] =
+            strip.products.length *
+            PRODUCT_ITEM_WIDTH;
+
+          startProductAutoScroll(
+            strip.id,
+            strip.products.length,
+          );
+        }
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+
+      homepageStrips.forEach((strip) => {
+        stopProductAutoScroll(strip.id);
+      });
+    };
+  }, [homepageStrips]);
+
+  /* =========================================================
+     MAIN COLLECTION SCROLL
+     ========================================================= */
+
+  function scrollToCollection() {
+    scrollViewRef.current?.scrollTo({
+      y: 360,
+      animated: true,
+    });
+  }
+
+  /* =========================================================
      LOADING
      ========================================================= */
 
@@ -371,7 +795,9 @@ const arrowScale = arrowAnimation.interpolate({
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" />
 
-        <Text style={styles.loadingText}>Loading {STORE.name}</Text>
+        <Text style={styles.loadingText}>
+          Loading {STORE.name}
+        </Text>
       </SafeAreaView>
     );
   }
@@ -383,47 +809,35 @@ const arrowScale = arrowAnimation.interpolate({
   if (error) {
     return (
       <SafeAreaView style={styles.center}>
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorText}>
+          {error}
+        </Text>
       </SafeAreaView>
     );
   }
 
   /* =========================================================
-     HERO MEDIA
+     RENDER
      ========================================================= */
 
-  let heroMedia: HeroMedia[] = Array.isArray(settings?.hero_media)
-    ? settings.hero_media
-    : [];
-
-  /*
-   * Fallback:
-   * If hero_media is empty but the old hero_image_url exists,
-   * use that image.
-   */
-
-  if (heroMedia.length === 0 && settings?.hero_image_url) {
-    heroMedia = [
-      {
-        url: settings.hero_image_url,
-        type: "image",
-      },
-    ];
-  }
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={[]}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={[]}
+    >
       <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
         {/* =================================================
-            Header
+            HEADER
             ================================================= */}
 
         <View style={styles.header}>
-          <Text style={styles.greeting}>Welcome to</Text>
+          <Text style={styles.greeting}>
+            Welcome to
+          </Text>
 
           {settings?.hero_title ? (
             <Text
@@ -437,26 +851,61 @@ const arrowScale = arrowAnimation.interpolate({
         </View>
 
         {/* =================================================
-            HERO MEDIA
+            HERO CAROUSEL
             ================================================= */}
 
         {heroMedia.length > 0 ? (
           <ScrollView
+            ref={heroCarouselRef}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
             snapToInterval={HERO_WIDTH}
-            contentContainerStyle={styles.heroScrollContent}
+            contentOffset={{
+              x:
+                HERO_WIDTH *
+                heroMedia.length,
+              y: 0,
+            }}
+            onTouchStart={() => {
+              if (
+                heroAutoScrollTimer.current
+              ) {
+                clearInterval(
+                  heroAutoScrollTimer.current,
+                );
+              }
+            }}
+            onMomentumScrollEnd={(event) => {
+              handleHeroCarouselEnd(event);
+              startHeroAutoScroll();
+            }}
+            contentContainerStyle={
+              styles.heroScrollContent
+            }
           >
-            {heroMedia.map((media, index) => (
-              <View style={styles.heroSlide} key={`${media.url}-${index}`}>
+            {[
+              ...heroMedia,
+              ...heroMedia,
+              ...heroMedia,
+            ].map((media, index) => (
+              <View
+                style={styles.heroSlide}
+                key={`${media.url}-${index}`}
+              >
                 {media.type === "video" ? (
-                  <HeroVideo url={media.url} />
+                  <HeroVideo
+                    url={media.url}
+                  />
                 ) : (
                   <Image
-                    source={{ uri: media.url }}
-                    style={styles.heroMedia}
+                    source={{
+                      uri: media.url,
+                    }}
+                    style={
+                      styles.heroMedia
+                    }
                     resizeMode="cover"
                   />
                 )}
@@ -466,42 +915,99 @@ const arrowScale = arrowAnimation.interpolate({
         ) : null}
 
         {/* =================================================
+            EXPLORE PRODUCTS BUTTON
+            ================================================= */}
+
+        <Pressable
+          onPress={() =>
+            router.push("/explore")
+          }
+          style={({ pressed }) => [
+            styles.exploreButton,
+            pressed &&
+              styles.exploreButtonPressed,
+          ]}
+        >
+          <View
+            style={
+              styles.exploreButtonInner
+            }
+          >
+            <Text
+              style={
+                styles.exploreButtonText
+              }
+            >
+              EXPLORE OUR PRODUCTS
+            </Text>
+
+            <Text
+              style={
+                styles.exploreButtonArrow
+              }
+            >
+              →
+            </Text>
+
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.buttonShine,
+                {
+                  transform: [
+                    {
+                      translateX:
+                        buttonShineTranslate,
+                    },
+                  ],
+                },
+              ]}
+            />
+          </View>
+        </Pressable>
+
+        {/* =================================================
             HERO DESCRIPTION
             ================================================= */}
 
         {settings?.hero_description ? (
-          <View style={styles.heroContent}>
-            <Text style={styles.heroText}>{settings.hero_description}</Text>
+          <View
+            style={styles.heroContent}
+          >
+            <Text
+              style={styles.heroText}
+            >
+              {settings.hero_description}
+            </Text>
           </View>
         ) : null}
 
         {/* =================================================
-            PRODUCT COLLECTION HEADER
+            COLLECTION HEADER
             ================================================= */}
 
-        <View style={styles.collectionHeader}>
-          <View style={styles.collectionText}>
-            <Text style={styles.collectionEyebrow}>DISCOVER</Text>
-
-            <Text style={styles.collectionTitle}>Our collection</Text>
-          </View>
-
-          <Pressable
-            onPress={scrollToCollection}
-            style={styles.scrollArrowButton}
+        <View
+          style={styles.collectionHeader}
+        >
+          <View
+            style={styles.collectionText}
           >
-            <Animated.Text
-              style={[
-                styles.scrollArrow,
-                {
-                  opacity: arrowOpacity,
-      transform: [{ scale: arrowScale }],
-                },
-              ]}
+            <Text
+              style={
+                styles.collectionEyebrow
+              }
             >
-              ↓
-            </Animated.Text>
-          </Pressable>
+              DISCOVER
+            </Text>
+
+            <Text
+              style={
+                styles.collectionTitle
+              }
+            >
+              Our collection
+            </Text>
+          </View>
         </View>
 
         {/* =================================================
@@ -511,40 +1017,68 @@ const arrowScale = arrowAnimation.interpolate({
         {homepageStrips.length > 0 ? (
           <View>
             {homepageStrips.map((strip) => (
-              <View key={strip.id} style={styles.strip}>
+              <View
+                key={strip.id}
+                style={styles.strip}
+              >
                 {/* ==========================================
                     STRIP HEADER
                     ========================================== */}
 
-                <View style={styles.sectionHeader}>
+                <View
+                  style={
+                    styles.sectionHeader
+                  }
+                >
                   <Text
-                    style={styles.sectionTitle}
+                    style={
+                      styles.sectionTitle
+                    }
                     numberOfLines={1}
                     ellipsizeMode="tail"
                   >
                     {strip.name}
                   </Text>
 
-                  {strip.type === "category" && strip.slug ? (
+                  {strip.type ===
+                    "category" &&
+                  strip.slug ? (
                     <Pressable
                       onPress={() => {
                         router.push({
-                          pathname: "/explore",
+                          pathname:
+                            "/explore",
                           params: {
-                            category: strip.slug,
+                            category:
+                              strip.slug,
                           },
                         });
                       }}
                     >
-                      <Text style={styles.seeAll}>View all →</Text>
+                      <Text
+                        style={
+                          styles.seeAll
+                        }
+                      >
+                        View all →
+                      </Text>
                     </Pressable>
-                  ) : strip.type === "all" ? (
+                  ) : strip.type ===
+                    "all" ? (
                     <Pressable
                       onPress={() => {
-                        router.push("/explore");
+                        router.push(
+                          "/explore",
+                        );
                       }}
                     >
-                      <Text style={styles.seeAll}>View all →</Text>
+                      <Text
+                        style={
+                          styles.seeAll
+                        }
+                      >
+                        View all →
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -553,82 +1087,186 @@ const arrowScale = arrowAnimation.interpolate({
                     PRODUCTS
                     ========================================== */}
 
-                {strip.products.length > 0 ? (
+                {strip.products.length >
+                0 ? (
                   <ScrollView
+                    ref={(ref) => {
+                      productCarouselRefs.current[
+                        strip.id
+                      ] = ref;
+                    }}
                     horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.horizontalList}
-                  >
-                    {strip.products.map((product) => {
-                      const image =
-                        Array.isArray(product.images) &&
-                        product.images.length > 0
-                          ? product.images[0]
-                          : null;
-
-                      const price = product.sale_price ?? product.price;
-
-                      return (
-                        <Pressable
-                          style={styles.productCard}
-                          key={product.id}
-                          onPress={() => {
-                            //console.log("Home product pressed:", product.id);
-
-                            router.push({
-                              pathname: "/product/[id]",
-                              params: {
-                                id: product.id,
-                              },
-                            });
-                          }}
-                        >
-                          {/* PRODUCT IMAGE */}
-
-                          <View style={styles.productImage}>
-                            {image ? (
-                              <Image
-                                source={{ uri: image }}
-                                style={styles.productImageActual}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <Text style={styles.imagePlaceholder}>
-                                No image
-                              </Text>
-                            )}
-                          </View>
-
-                          {/* STICKER */}
-
-                          {product.sticker ? (
-                            <Text style={styles.sticker}>
-                              {product.sticker}
-                            </Text>
-                          ) : null}
-
-                          {/* PRODUCT NAME */}
-
-                          <Text
-                            style={styles.productName}
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                          >
-                            {product.name}
-                          </Text>
-
-                          {/* PRICE */}
-
-                          <Text style={styles.productPrice}>
-                            CHF {Number(price).toFixed(2)}
-                          </Text>
-                        </Pressable>
+                    showsHorizontalScrollIndicator={
+                      false
+                    }
+                    decelerationRate="fast"
+                    scrollEventThrottle={16}
+                    onScroll={(event) => {
+                      handleProductScroll(
+                        strip.id,
+                        event,
                       );
-                    })}
+                    }}
+                    onTouchStart={() => {
+                      productUserScrolling.current[
+                        strip.id
+                      ] = true;
+
+                      stopProductAutoScroll(
+                        strip.id,
+                      );
+                    }}
+                    onMomentumScrollEnd={(
+                      event,
+                    ) => {
+                      handleProductCarouselEnd(
+                        strip.id,
+                        event,
+                        strip.products.length,
+                      );
+
+                      productUserScrolling.current[
+                        strip.id
+                      ] = false;
+
+                      startProductAutoScroll(
+                        strip.id,
+                        strip.products.length,
+                      );
+                    }}
+                    contentOffset={{
+                      x:
+                        strip.products.length *
+                        PRODUCT_ITEM_WIDTH,
+                      y: 0,
+                    }}
+                    contentContainerStyle={
+                      styles.horizontalList
+                    }
+                  >
+                    {[
+                      ...strip.products,
+                      ...strip.products,
+                      ...strip.products,
+                    ].map(
+                      (
+                        product,
+                        index,
+                      ) => {
+                        const image =
+                          Array.isArray(
+                            product.images,
+                          ) &&
+                          product.images
+                            .length > 0
+                            ? product.images[0]
+                            : null;
+
+                        const price =
+                          product.sale_price ??
+                          product.price;
+
+                        return (
+                          <Pressable
+                            style={
+                              styles.productCard
+                            }
+                            key={`${product.id}-${index}`}
+                            onPress={() => {
+                              router.push(
+                                {
+                                  pathname:
+                                    "/product/[id]",
+                                  params: {
+                                    id: product.id,
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            {/* PRODUCT IMAGE */}
+
+                            <View
+                              style={
+                                styles.productImage
+                              }
+                            >
+                              {image ? (
+                                <Image
+                                  source={{
+                                    uri: image,
+                                  }}
+                                  style={
+                                    styles.productImageActual
+                                  }
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <Text
+                                  style={
+                                    styles.imagePlaceholder
+                                  }
+                                >
+                                  No image
+                                </Text>
+                              )}
+                            </View>
+
+                            {/* STICKER */}
+
+                            {product.sticker ? (
+                              <Text
+                                style={
+                                  styles.sticker
+                                }
+                              >
+                                {
+                                  product.sticker
+                                }
+                              </Text>
+                            ) : null}
+
+                            {/* PRODUCT NAME */}
+
+                            <Text
+                              style={
+                                styles.productName
+                              }
+                              numberOfLines={1}
+                              ellipsizeMode="tail"
+                            >
+                              {
+                                product.name
+                              }
+                            </Text>
+
+                            {/* PRICE */}
+
+                            <Text
+                              style={
+                                styles.productPrice
+                              }
+                            >
+                              CHF{" "}
+                              {Number(
+                                price,
+                              ).toFixed(
+                                2,
+                              )}
+                            </Text>
+                          </Pressable>
+                        );
+                      },
+                    )}
                   </ScrollView>
                 ) : (
-                  <Text style={styles.emptyStripText}>
-                    No products in this strip yet.
+                  <Text
+                    style={
+                      styles.emptyStripText
+                    }
+                  >
+                    No products in this strip
+                    yet.
                   </Text>
                 )}
               </View>
@@ -636,7 +1274,8 @@ const arrowScale = arrowAnimation.interpolate({
           </View>
         ) : (
           <Text style={styles.emptyText}>
-            No homepage product strips have been selected yet.
+            No homepage product strips have
+            been selected yet.
           </Text>
         )}
       </ScrollView>
@@ -649,16 +1288,22 @@ const arrowScale = arrowAnimation.interpolate({
    ========================================================= */
 
 const styles = StyleSheet.create({
+  /* =======================================================
+     GENERAL
+     ======================================================= */
+
   safeArea: {
     flex: 1,
-    backgroundColor: STORE.colors.background,
+    backgroundColor:
+      STORE.colors.background,
   },
 
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: STORE.colors.background,
+    backgroundColor:
+      STORE.colors.background,
   },
 
   loadingText: {
@@ -682,12 +1327,20 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 1,
-    paddingBottom: 8,
+    paddingBottom: 18,
   },
 
   greeting: {
     fontSize: 14,
     color: "#777",
+  },
+
+  heroTitle: {
+    fontSize: 25,
+    fontWeight: "700",
+    color: "#a87900",
+    textAlign: "center",
+    paddingTop: 5,
   },
 
   /* =======================================================
@@ -704,7 +1357,8 @@ const styles = StyleSheet.create({
     marginRight: 0,
     borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: STORE.colors.background,
+    backgroundColor:
+      STORE.colors.background,
   },
 
   heroMedia: {
@@ -718,12 +1372,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  heroTitle: {
-    fontSize: 25,
-    fontWeight: "700",
-    color: "#111",
-  },
-
   heroText: {
     fontSize: 15,
     color: "#666",
@@ -732,7 +1380,90 @@ const styles = StyleSheet.create({
   },
 
   /* =======================================================
-     COLLECTION
+     EXPLORE BUTTON
+     ======================================================= */
+
+  exploreButton: {
+    marginHorizontal: 20,
+    marginTop: 18,
+    marginBottom: 4,
+    borderRadius: 16,
+    overflow: "hidden",
+
+    borderWidth: 1,
+    borderColor: "#d4af37",
+
+    shadowColor: "#a87900",
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+
+  exploreButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+
+  exploreButtonInner: {
+    height: 58,
+    borderRadius: 15,
+    backgroundColor: "#c9a227",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    overflow: "hidden",
+
+    borderTopWidth: 1,
+    borderTopColor: "#f8e7a1",
+
+    borderBottomWidth: 1,
+    borderBottomColor: "#8c6500",
+  },
+
+  exploreButtonText: {
+    color: "#fffdf3",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+
+    textShadowColor:
+      "rgba(90, 60, 0, 0.45)",
+
+    textShadowOffset: {
+      width: 0,
+      height: 1,
+    },
+
+    textShadowRadius: 2,
+  },
+
+  exploreButtonArrow: {
+    color: "#fffdf3",
+    fontSize: 22,
+    fontWeight: "400",
+    marginLeft: 12,
+    marginTop: -2,
+  },
+
+  buttonShine: {
+    position: "absolute",
+    width: 35,
+    height: 100,
+    backgroundColor:
+      "rgba(255, 255, 255, 0.38)",
+    transform: [
+      {
+        rotate: "22deg",
+      },
+    ],
+  },
+
+  /* =======================================================
+     COLLECTION HEADER
      ======================================================= */
 
   collectionHeader: {
@@ -741,7 +1472,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
   },
 
   collectionText: {
@@ -760,27 +1490,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 5,
   },
-
-  scrollArrowButton: {
-    width: 42,
-    height: 42,
-    marginLeft: 14,
-    marginTop: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  scrollArrow: {
-  fontSize: 32,
-  fontWeight: "400",
-  color: "#a87900",
-  textShadowColor: "rgba(168, 121, 0, 0.75)",
-  textShadowOffset: {
-    width: 0,
-    height: 0,
-  },
-  textShadowRadius: 12,
-},
 
   /* =======================================================
      PRODUCT STRIPS
@@ -812,7 +1521,7 @@ const styles = StyleSheet.create({
 
   horizontalList: {
     paddingHorizontal: 20,
-    gap: 12,
+    gap: PRODUCT_GAP,
   },
 
   /* =======================================================
@@ -820,14 +1529,15 @@ const styles = StyleSheet.create({
      ======================================================= */
 
   productCard: {
-    width: 155,
+    width: PRODUCT_CARD_WIDTH,
   },
 
   productImage: {
-    width: 155,
+    width: PRODUCT_CARD_WIDTH,
     height: 170,
     borderRadius: 16,
-    backgroundColor: STORE.colors.background,
+    backgroundColor:
+      STORE.colors.background,
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",

@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { STORE } from "@/constants/store";
-import { supabase } from "@/lib/supabase";
+import { notifyCartChanged, supabase } from "@/lib/supabase";
 import { Alert } from "react-native";
 
 type DisplaySettings = {
@@ -304,7 +304,7 @@ export default function ProductDetailScreen() {
         if (updateError) {
           throw updateError;
         }
-
+        notifyCartChanged();
         Alert.alert(
           "Cart updated",
           isPreBooking
@@ -328,6 +328,7 @@ export default function ProductDetailScreen() {
       if (insertError) {
         throw insertError;
       }
+      notifyCartChanged();
 
       Alert.alert(
         isPreBooking ? "Pre-booking added" : "Added to cart",
@@ -368,7 +369,10 @@ export default function ProductDetailScreen() {
       <SafeAreaView style={styles.center}>
         <Text style={styles.errorText}>{error ?? "Product not found."}</Text>
 
-        <Pressable style={styles.backButton} onPress={() => router.push("/explore")}>
+        <Pressable
+          style={styles.backButton}
+          onPress={() => router.push("/explore")}
+        >
           <Text style={styles.backButtonText}>← Back to products</Text>
         </Pressable>
       </SafeAreaView>
@@ -409,7 +413,10 @@ export default function ProductDetailScreen() {
             Back
             ================================================= */}
 
-        <Pressable onPress={() => router.push("/explore")} style={styles.backLink}>
+        <Pressable
+          onPress={() => router.push("/explore")}
+          style={styles.backLink}
+        >
           <Text style={styles.backLinkText}>← Back to products</Text>
         </Pressable>
 
@@ -468,35 +475,33 @@ export default function ProductDetailScreen() {
           {/* Categories */}
 
           {categories.length > 0 && (
-  <View style={styles.categoryList}>
-    {categories.map((category) => (
-      <Pressable
-        key={category.id}
-        onPress={() =>
-          router.push({
-            pathname: "/explore",
-            params: {
-              category: category.id,
-            },
-          })
-        }
-        style={styles.categoryBadge}
-      >
-        {category.image_url ? (
-          <Image
-            source={{ uri: category.image_url }}
-            style={styles.categoryImage}
-            resizeMode="cover"
-          />
-        ) : null}
+            <View style={styles.categoryList}>
+              {categories.map((category) => (
+                <Pressable
+                  key={category.id}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/explore",
+                      params: {
+                        category: category.id,
+                      },
+                    })
+                  }
+                  style={styles.categoryBadge}
+                >
+                  {category.image_url ? (
+                    <Image
+                      source={{ uri: category.image_url }}
+                      style={styles.categoryImage}
+                      resizeMode="cover"
+                    />
+                  ) : null}
 
-        <Text style={styles.categoryText}>
-          {category.name}
-        </Text>
-      </Pressable>
-    ))}
-  </View>
-)}
+                  <Text style={styles.categoryText}>{category.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
 
           {/* Price */}
 
@@ -765,21 +770,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 
- categoryBadge: {
-  flexDirection: "row",
-  alignItems: "center",
-  paddingLeft: 4,
-  paddingRight: 12,
-  paddingVertical: 4,
-  borderRadius: 999,
-  backgroundColor: "#f1f1f1",
-},
-categoryImage: {
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  marginRight: 6,
-},
+  categoryBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#f1f1f1",
+  },
+  categoryImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 6,
+  },
 
   categoryText: {
     fontSize: 13,
