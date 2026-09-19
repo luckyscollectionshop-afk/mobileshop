@@ -189,12 +189,40 @@ function useSupabaseDeepLinkObserver() {
         const code = typeof allParams.code === "string" ? allParams.code : null;
 
         const token =
-          typeof allParams.token === "string" ? allParams.token : null;
+          typeof allParams.token === "string"
+            ? allParams.token
+            : typeof allParams.token_hash === "string"
+              ? allParams.token_hash
+              : null;
 
         const type = typeof allParams.type === "string" ? allParams.type : null;
 
-        const email =
+        const emailFromQuery =
           typeof allParams.email === "string" ? allParams.email : null;
+
+        const redirectTo =
+          typeof allParams.redirect_to === "string"
+            ? allParams.redirect_to
+            : typeof allParams.redirectTo === "string"
+              ? allParams.redirectTo
+              : null;
+
+        const redirectToParams = (() => {
+          if (!redirectTo) {
+            return new URLSearchParams();
+          }
+
+          try {
+            const redirectUrl = new URL(redirectTo);
+            return new URLSearchParams(redirectUrl.search || "");
+          } catch {
+            return new URLSearchParams(
+              redirectTo.includes("?") ? redirectTo.split("?")[1] || "" : "",
+            );
+          }
+        })();
+
+        const email = emailFromQuery || redirectToParams.get("email") || null;
 
         const accessToken =
           typeof allParams.access_token === "string"
@@ -213,7 +241,10 @@ function useSupabaseDeepLinkObserver() {
          */
 
         const isRecoveryLink =
-          path === "auth/reset-password" || type === "recovery";
+          path === "auth/reset-password" ||
+          path === "reset-password" ||
+          type === "recovery" ||
+          (redirectTo && redirectTo.includes("auth/reset-password"));
 
         if (isRecoveryLink) {
           if (code) {
@@ -269,7 +300,15 @@ function useSupabaseDeepLinkObserver() {
           if (token && type === "recovery") {
             if (!email) {
               console.error(
-                "Recovery token link is missing the email parameter.",
+                "Recovery token link is missing the email parameter; checking nested redirect parameters.",
+              );
+            }
+
+            const recoveryEmail = email || "";
+
+            if (!recoveryEmail) {
+              console.error(
+                "Recovery token link is missing the email parameter and cannot be verified.",
               );
               return;
             }
@@ -277,7 +316,7 @@ function useSupabaseDeepLinkObserver() {
             const { data, error } = await supabase.auth.verifyOtp({
               type: "recovery",
               token,
-              email,
+              email: recoveryEmail,
             });
 
             if (error) {
