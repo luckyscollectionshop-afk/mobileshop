@@ -37,12 +37,13 @@ export default function CartScreen() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [catalogMode, setCatalogMode] = useState(false);
 
   /*
    * Reload the cart whenever the screen becomes active.
    *
-   * This is important because a product can be added from
-   * the product page and then the user navigates to Cart.
+   * Also reload catalog mode so the cart immediately reflects
+   * the current storefront setting.
    */
   useFocusEffect(
     useCallback(() => {
@@ -53,6 +54,30 @@ export default function CartScreen() {
   async function loadCart() {
     try {
       setLoading(true);
+
+      // ---------------------------------------------------------
+      // Load catalog mode
+      // ---------------------------------------------------------
+
+      const { data: siteSettings, error: siteSettingsError } =
+        await supabase
+          .from("site_settings")
+          .select("catalog_mode")
+          .eq("id", true)
+          .maybeSingle();
+
+      if (siteSettingsError) {
+        console.error("Site settings loading error:", siteSettingsError);
+
+        // Do not block the cart if the setting cannot be loaded.
+        setCatalogMode(false);
+      } else {
+        setCatalogMode(Boolean(siteSettings?.catalog_mode));
+      }
+
+      // ---------------------------------------------------------
+      // Get current user
+      // ---------------------------------------------------------
 
       const {
         data: { user },
@@ -90,19 +115,19 @@ export default function CartScreen() {
         .from("cart_items")
         .select(
           `
+            id,
+            quantity,
+            product_id,
+            products (
               id,
-              quantity,
-              product_id,
-              products (
-                id,
-                name,
-                price,
-                sale_price,
-                stock,
-                images,
-                available_for_sale
-              )
-            `,
+              name,
+              price,
+              sale_price,
+              stock,
+              images,
+              available_for_sale
+            )
+          `,
         )
         .eq("cart_id", cart.id)
         .order("created_at", {
@@ -114,7 +139,10 @@ export default function CartScreen() {
       }
 
       const formattedItems: CartItem[] = (cartItems ?? []).flatMap((item) => {
-        const product = item.products as CartProduct | CartProduct[] | null;
+        const product = item.products as
+          | CartProduct
+          | CartProduct[]
+          | null;
 
         const actualProduct = Array.isArray(product) ? product[0] : product;
 
@@ -197,7 +225,9 @@ export default function CartScreen() {
       if (error) {
         throw error;
       }
+
       notifyCartChanged();
+
       setItems((currentItems) =>
         currentItems.map((currentItem) =>
           currentItem.id === item.id
@@ -235,7 +265,9 @@ export default function CartScreen() {
       if (error) {
         throw error;
       }
+
       notifyCartChanged();
+
       setItems((currentItems) =>
         currentItems.filter((currentItem) => currentItem.id !== item.id),
       );
@@ -282,7 +314,9 @@ export default function CartScreen() {
             style={styles.continueButton}
             onPress={() => router.push("/explore")}
           >
-            <Text style={styles.continueButtonText}>Continue shopping</Text>
+            <Text style={styles.continueButtonText}>
+              Continue shopping
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -293,6 +327,12 @@ export default function CartScreen() {
   // Totals
   // -------------------------------------------------------------
 
+  /*
+   * We still calculate the real subtotal because checkout/order
+   * creation continues to use the actual product prices.
+   *
+   * Catalog mode only hides these values from the customer UI.
+   */
   const subtotal = items.reduce((total, item) => {
     const unitPrice =
       item.product.sale_price !== null
@@ -302,7 +342,10 @@ export default function CartScreen() {
     return total + unitPrice * item.quantity;
   }, 0);
 
-  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
+  const itemCount = items.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
 
   // -------------------------------------------------------------
   // Render
@@ -327,6 +370,22 @@ export default function CartScreen() {
         </View>
 
         {/* =====================================================
+            Catalog mode information
+           ===================================================== */}
+
+        {catalogMode && (
+          <View style={styles.catalogNotice}>
+            <Text style={styles.catalogNoticeTitle}>
+              Catalog mode
+            </Text>
+
+            <Text style={styles.catalogNoticeText}>
+              Prices are provided after your order is submitted.
+            </Text>
+          </View>
+        )}
+
+        {/* =====================================================
             Items
            ===================================================== */}
 
@@ -338,7 +397,9 @@ export default function CartScreen() {
               !product.available_for_sale && product.stock <= 0;
 
             const unitPrice =
-              product.sale_price !== null ? product.sale_price : product.price;
+              product.sale_price !== null
+                ? product.sale_price
+                : product.price;
 
             const lineTotal = unitPrice * item.quantity;
 
@@ -361,7 +422,9 @@ export default function CartScreen() {
                     />
                   ) : (
                     <View style={styles.noImage}>
-                      <Text style={styles.noImageText}>No image</Text>
+                      <Text style={styles.noImageText}>
+                        No image
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -369,55 +432,85 @@ export default function CartScreen() {
                 {/* Product details */}
 
                 <View style={styles.itemDetails}>
-                  <Text style={styles.productName} numberOfLines={2}>
+                  <Text
+                    style={styles.productName}
+                    numberOfLines={2}
+                  >
                     {product.name}
                   </Text>
 
                   {isPreBooking && (
-                    <Text style={styles.preBooking}>Pre-booking</Text>
+                    <Text style={styles.preBooking}>
+                      Pre-booking
+                    </Text>
                   )}
 
-                  <View style={styles.priceRow}>
-                    <Text style={styles.unitPrice}>
-                      CHF {unitPrice.toFixed(2)}
-                    </Text>
+                  {/* Prices are hidden in catalog mode */}
 
-                    {product.sale_price !== null && (
-                      <Text style={styles.originalPrice}>
-                        CHF {product.price.toFixed(2)}
+                  {!catalogMode && (
+                    <View style={styles.priceRow}>
+                      <Text style={styles.unitPrice}>
+                        CHF {unitPrice.toFixed(2)}
                       </Text>
-                    )}
-                  </View>
+
+                      {product.sale_price !== null && (
+                        <Text style={styles.originalPrice}>
+                          CHF {product.price.toFixed(2)}
+                        </Text>
+                      )}
+                    </View>
+                  )}
 
                   {/* Quantity */}
 
                   <View style={styles.bottomRow}>
                     <View style={styles.quantityControl}>
                       <Pressable
-                        disabled={busy || item.quantity <= 1}
-                        onPress={() => updateQuantity(item, item.quantity - 1)}
+                        disabled={
+                          busy || item.quantity <= 1
+                        }
+                        onPress={() =>
+                          updateQuantity(
+                            item,
+                            item.quantity - 1,
+                          )
+                        }
                         style={styles.quantityButton}
                       >
-                        <Text style={styles.quantityButtonText}>−</Text>
+                        <Text style={styles.quantityButtonText}>
+                          −
+                        </Text>
                       </Pressable>
 
-                      <Text style={styles.quantityText}>{item.quantity}</Text>
+                      <Text style={styles.quantityText}>
+                        {item.quantity}
+                      </Text>
 
                       <Pressable
                         disabled={
                           busy ||
-                          (!isPreBooking && item.quantity >= product.stock)
+                          (!isPreBooking &&
+                            item.quantity >= product.stock)
                         }
-                        onPress={() => updateQuantity(item, item.quantity + 1)}
+                        onPress={() =>
+                          updateQuantity(
+                            item,
+                            item.quantity + 1,
+                          )
+                        }
                         style={styles.quantityButton}
                       >
-                        <Text style={styles.quantityButtonText}>+</Text>
+                        <Text style={styles.quantityButtonText}>
+                          +
+                        </Text>
                       </Pressable>
                     </View>
 
-                    <Text style={styles.lineTotal}>
-                      CHF {lineTotal.toFixed(2)}
-                    </Text>
+                    {!catalogMode && (
+                      <Text style={styles.lineTotal}>
+                        CHF {lineTotal.toFixed(2)}
+                      </Text>
+                    )}
                   </View>
 
                   {/* Remove */}
@@ -427,7 +520,9 @@ export default function CartScreen() {
                     onPress={() => removeItem(item)}
                     style={styles.removeButton}
                   >
-                    <Text style={styles.removeText}>Remove</Text>
+                    <Text style={styles.removeText}>
+                      Remove
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -440,28 +535,49 @@ export default function CartScreen() {
            ===================================================== */}
 
         <View style={styles.summary}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
+          {!catalogMode ? (
+            <>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>
+                  Subtotal
+                </Text>
 
-            <Text style={styles.summaryValue}>CHF {subtotal.toFixed(2)}</Text>
-          </View>
+                <Text style={styles.summaryValue}>
+                  CHF {subtotal.toFixed(2)}
+                </Text>
+              </View>
 
-          <Text style={styles.shippingNote}>
-            Shipping and payment options will be shown at checkout.
-          </Text>
+              <Text style={styles.shippingNote}>
+                Shipping and payment options will be shown at
+                checkout.
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.catalogSummaryText}>
+              Submit your order and the admin will contact you
+              with the price details, shipping and payment
+              options.
+            </Text>
+          )}
+
+          {/* Checkout remains available in catalog mode */}
 
           <Pressable
             style={styles.checkoutButton}
             onPress={() => router.push("/checkout" as any)}
           >
-            <Text style={styles.checkoutButtonText}>Proceed to checkout</Text>
+            <Text style={styles.checkoutButtonText}>
+              Proceed to checkout
+            </Text>
           </Pressable>
 
           <Pressable
             style={styles.continueLink}
             onPress={() => router.push("/explore")}
           >
-            <Text style={styles.continueLinkText}>← Continue shopping</Text>
+            <Text style={styles.continueLinkText}>
+              ← Continue shopping
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -517,6 +633,33 @@ const styles = StyleSheet.create({
 
   itemCount: {
     fontSize: 13,
+    color: "#777",
+  },
+
+  /* =======================================================
+     Catalog mode
+     ======================================================= */
+
+  catalogNotice: {
+    marginBottom: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e1ddd5",
+    backgroundColor: "rgba(255,255,255,0.45)",
+  },
+
+  catalogNoticeTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#333",
+  },
+
+  catalogNoticeText: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 18,
     color: "#777",
   },
 
@@ -688,6 +831,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: "#777",
+  },
+
+  catalogSummaryText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#666",
   },
 
   checkoutButton: {

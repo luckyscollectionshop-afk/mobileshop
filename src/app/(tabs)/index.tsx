@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import {
   ActivityIndicator,
   Animated,
@@ -9,10 +10,12 @@ import {
   Text,
   View,
 } from "react-native";
+
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { VideoView, useVideoPlayer } from "expo-video";
+import { WebView } from "react-native-webview";
 import { useRouter } from "expo-router";
+
 import { supabase } from "@/lib/supabase";
 import { STORE } from "@/constants/store";
 
@@ -22,7 +25,7 @@ import { STORE } from "@/constants/store";
 
 type HeroMedia = {
   url: string;
-  type: "image" | "video";
+  type: "image" | "youtube";
 };
 
 type DisplaySettings = {
@@ -36,6 +39,7 @@ type SiteSettings = {
   hero_image_url: string | null;
   hero_media: HeroMedia[] | null;
   homepage_category_ids: string[] | null;
+  catalog_mode: boolean;
 };
 
 type Product = {
@@ -65,7 +69,6 @@ const ALL_PRODUCTS_ID = "__all__";
 const PREBOOKING_ID = "__prebooking__";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-
 const HERO_WIDTH = SCREEN_WIDTH - 40;
 const HERO_HEIGHT = 360;
 
@@ -73,32 +76,168 @@ const PRODUCT_CARD_WIDTH = 155;
 const PRODUCT_GAP = 12;
 const PRODUCT_ITEM_WIDTH = PRODUCT_CARD_WIDTH + PRODUCT_GAP;
 
-/*
- * Product auto-scroll speed.
- *
- * Smaller number = faster.
- * This is the number of pixels moved on each animation frame.
- */
 const PRODUCT_SCROLL_SPEED = 0.55;
 
 /* =========================================================
-   HERO VIDEO
+   YOUTUBE HELPERS
    ========================================================= */
 
-function HeroVideo({ url }: { url: string }) {
-  const player = useVideoPlayer(url, (player) => {
-    player.loop = true;
-    player.muted = true;
-    player.play();
-  });
+/**
+ * Converts common YouTube URLs into a YouTube video ID.
+ *
+ * Supported:
+ *
+ * https://www.youtube.com/watch?v=ABC123
+ * https://youtu.be/ABC123
+ * https://www.youtube.com/embed/ABC123
+ * https://www.youtube.com/shorts/ABC123
+ */
+function getYouTubeVideoId(url: string): string | null {
+  try {
+    const trimmed = url.trim();
+
+    /*
+     * Also allow the admin to store just the YouTube video ID.
+     */
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    const parsed = new URL(trimmed);
+
+    /*
+     * youtube.com/watch?v=...
+     */
+    if (parsed.hostname.includes("youtube.com")) {
+      const watchId = parsed.searchParams.get("v");
+
+      if (watchId) {
+        return watchId;
+      }
+
+      /*
+       * youtube.com/embed/...
+       */
+      const embedMatch = parsed.pathname.match(/\/embed\/([^/]+)/);
+
+      if (embedMatch?.[1]) {
+        return embedMatch[1];
+      }
+
+      /*
+       * youtube.com/shorts/...
+       */
+      const shortsMatch = parsed.pathname.match(/\/shorts\/([^/]+)/);
+
+      if (shortsMatch?.[1]) {
+        return shortsMatch[1];
+      }
+    }
+
+    /*
+     * youtu.be/...
+     */
+    if (parsed.hostname === "youtu.be") {
+      const id = parsed.pathname.replace("/", "").split("/")[0];
+
+      if (id) {
+        return id;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/* =========================================================
+   YOUTUBE HERO
+   ========================================================= */
+
+function YouTubeHero({ url }: { url: string }) {
+  const videoId = getYouTubeVideoId(url);
+
+  if (!videoId) {
+    return (
+      <View style={styles.youtubeError}>
+        <Text style={styles.youtubeErrorText}>
+          Unable to load YouTube video.
+        </Text>
+      </View>
+    );
+  }
+
+  const embedUrl =
+    `https://www.youtube.com/embed/${videoId}` +
+    `?autoplay=0` +
+    `&controls=1` +
+    `&rel=0` +
+    `&playsinline=1` +
+    `&enablejsapi=1`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta
+          name="referrer"
+          content="strict-origin-when-cross-origin"
+        />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0"
+        />
+        <style>
+          html,
+          body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+          }
+
+          iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+          }
+        </style>
+      </head>
+
+      <body>
+        <iframe
+          src="${embedUrl}"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin"
+        ></iframe>
+      </body>
+    </html>
+  `;
 
   return (
-    <VideoView
-      player={player}
-      style={styles.heroMedia}
-      contentFit="cover"
-      nativeControls={false}
-    />
+    <View style={styles.youtubeContainer}>
+      <WebView
+        source={{
+          html,
+          baseUrl: "https://com.anupama1.mobileshop",
+        }}
+        style={styles.heroMedia}
+        javaScriptEnabled
+        domStorageEnabled
+        allowsFullscreenVideo
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction
+        scrollEnabled={false}
+        bounces={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        originWhitelist={["*"]}
+      />
+    </View>
   );
 }
 
@@ -140,15 +279,11 @@ export default function HomeScreen() {
 
   const productCarouselRefs = useRef<Record<string, ScrollView | null>>({});
 
-  /*
-   * Each strip gets its own animation frame.
-   *
-   * This gives us smooth continuous movement rather than
-   * jumping from product to product.
-   */
   const productAnimationFrames = useRef<Record<string, number | null>>({});
 
   const productUserScrolling = useRef<Record<string, boolean>>({});
+
+  const productScrollOffsets = useRef<Record<string, number>>({});
 
   /* =======================================================
      BUTTON SHINE ANIMATION
@@ -211,7 +346,7 @@ export default function HomeScreen() {
       const { data: siteSettings, error: settingsError } = await supabase
         .from("site_settings")
         .select(
-          "hero_title, hero_description, hero_image_url, hero_media, homepage_category_ids",
+          "hero_title, hero_description, hero_image_url, hero_media, homepage_category_ids, catalog_mode",
         )
         .eq("id", true)
         .single();
@@ -220,7 +355,7 @@ export default function HomeScreen() {
         throw settingsError;
       }
 
-      setSettings(siteSettings);
+      setSettings(siteSettings as SiteSettings);
 
       const homepageStripIds =
         (siteSettings?.homepage_category_ids as string[] | null) ?? [];
@@ -271,7 +406,9 @@ export default function HomeScreen() {
                 `,
               )
               .eq("active", true)
-              .order("created_at", { ascending: false })
+              .order("created_at", {
+                ascending: false,
+              })
           : { data: [], error: null };
 
       if (allProductsError) {
@@ -325,11 +462,15 @@ export default function HomeScreen() {
       for (const link of categoryLinks ?? []) {
         const product = link.product as Product | Product[] | null;
 
-        if (!product) continue;
+        if (!product) {
+          continue;
+        }
 
         const item = Array.isArray(product) ? product[0] : product;
 
-        if (!item || !item.active) continue;
+        if (!item || !item.active) {
+          continue;
+        }
 
         const existing = productsByCategory.get(link.category_id) ?? [];
 
@@ -397,7 +538,9 @@ export default function HomeScreen() {
 
         const category = (categories ?? []).find((item) => item.id === stripId);
 
-        if (!category) continue;
+        if (!category) {
+          continue;
+        }
 
         strips.push({
           id: category.id,
@@ -419,10 +562,21 @@ export default function HomeScreen() {
 
   /* =========================================================
      HERO MEDIA
+
+     ONLY:
+       - image
+       - youtube
+
+     There is deliberately NO "video" handling here.
      ========================================================= */
 
   const heroMedia: HeroMedia[] = Array.isArray(settings?.hero_media)
-    ? settings.hero_media
+    ? settings.hero_media.filter(
+        (media): media is HeroMedia =>
+          media &&
+          typeof media.url === "string" &&
+          (media.type === "image" || media.type === "youtube"),
+      )
     : settings?.hero_image_url
       ? [
           {
@@ -468,19 +622,7 @@ export default function HomeScreen() {
 
     const currentIndex = Math.round(x / HERO_WIDTH);
 
-    /*
-     * We render:
-     *
-     * [copy 1][copy 2][copy 3]
-     *
-     * We normally stay in copy 2.
-     */
-
     heroIndex.current = currentIndex - heroMedia.length;
-
-    /* -------------------------------------------------------
-       FIRST COPY → MIDDLE COPY
-       ------------------------------------------------------- */
 
     if (currentIndex < heroMedia.length) {
       const newIndex = currentIndex + heroMedia.length;
@@ -492,9 +634,6 @@ export default function HomeScreen() {
 
       heroIndex.current = newIndex - heroMedia.length;
     } else if (currentIndex >= heroMedia.length * 2) {
-      /* -------------------------------------------------------
-       THIRD COPY → MIDDLE COPY
-       ------------------------------------------------------- */
       const newIndex = currentIndex - heroMedia.length;
 
       heroCarouselRef.current?.scrollTo({
@@ -507,7 +646,7 @@ export default function HomeScreen() {
   }
 
   /* =========================================================
-     START HERO AUTO SCROLL WHEN HERO DATA EXISTS
+     START HERO AUTO SCROLL
      ========================================================= */
 
   useEffect(() => {
@@ -547,19 +686,21 @@ export default function HomeScreen() {
         return;
       }
 
-      /*
-       * Do not move while the user is touching /
-       * manually scrolling the carousel.
-       */
-
       if (!productUserScrolling.current[stripId]) {
-        /*
-         * Use a tiny offset on every animation frame.
-         * This creates a continuous smooth movement.
-         */
+        const currentX = getCurrentProductScrollOffset(stripId);
+
+        const blockWidth = productCount * PRODUCT_ITEM_WIDTH;
+
+        let nextX = currentX + PRODUCT_SCROLL_SPEED;
+
+        if (nextX >= blockWidth * 2) {
+          nextX -= blockWidth;
+        }
+
+        productScrollOffsets.current[stripId] = nextX;
 
         ref.scrollTo({
-          x: getCurrentProductScrollOffset(stripId) + PRODUCT_SCROLL_SPEED,
+          x: nextX,
           animated: false,
         });
       }
@@ -573,8 +714,6 @@ export default function HomeScreen() {
   /* =========================================================
      PRODUCT CURRENT OFFSET
      ========================================================= */
-
-  const productScrollOffsets = useRef<Record<string, number>>({});
 
   function getCurrentProductScrollOffset(stripId: string) {
     return productScrollOffsets.current[stripId] ?? 0;
@@ -621,10 +760,6 @@ export default function HomeScreen() {
 
     const blockWidth = productCount * PRODUCT_ITEM_WIDTH;
 
-    /*
-     * First copy → middle copy
-     */
-
     if (x < blockWidth * 0.5) {
       const newX = x + blockWidth;
 
@@ -635,9 +770,6 @@ export default function HomeScreen() {
 
       productScrollOffsets.current[stripId] = newX;
     } else if (x >= blockWidth * 2.5) {
-      /*
-       * Third copy → middle copy
-       */
       const newX = x - blockWidth;
 
       productCarouselRefs.current[stripId]?.scrollTo({
@@ -658,11 +790,6 @@ export default function HomeScreen() {
       return;
     }
 
-    /*
-     * Give React Native time to render the ScrollViews
-     * before starting their animation.
-     */
-
     const timer = setTimeout(() => {
       homepageStrips.forEach((strip) => {
         if (strip.products.length > 1) {
@@ -682,7 +809,6 @@ export default function HomeScreen() {
       });
     };
   }, [homepageStrips]);
-
 
   /* =========================================================
      LOADING
@@ -716,7 +842,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={[]}>
-      <ScrollView        
+      <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
@@ -767,8 +893,8 @@ export default function HomeScreen() {
           >
             {[...heroMedia, ...heroMedia, ...heroMedia].map((media, index) => (
               <View style={styles.heroSlide} key={`${media.url}-${index}`}>
-                {media.type === "video" ? (
-                  <HeroVideo url={media.url} />
+                {media.type === "youtube" ? (
+                  <YouTubeHero url={media.url} />
                 ) : (
                   <Image
                     source={{
@@ -985,9 +1111,11 @@ export default function HomeScreen() {
 
                           {/* PRICE */}
 
-                          <Text style={styles.productPrice}>
-                            CHF {Number(price).toFixed(2)}
-                          </Text>
+                          {!settings?.catalog_mode ? (
+                            <Text style={styles.productPrice}>
+                              CHF {Number(price).toFixed(2)}
+                            </Text>
+                          ) : null}
                         </Pressable>
                       );
                     })}
@@ -1090,6 +1218,34 @@ const styles = StyleSheet.create({
     height: "100%",
   },
 
+  /* =======================================================
+     YOUTUBE
+     ======================================================= */
+
+  youtubeContainer: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000",
+  },
+
+  youtubeError: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#000",
+    paddingHorizontal: 20,
+  },
+
+  youtubeErrorText: {
+    color: "#fff",
+    textAlign: "center",
+    fontSize: 14,
+  },
+
+  /* =======================================================
+     HERO CONTENT
+     ======================================================= */
+
   heroContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -1113,10 +1269,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     borderRadius: 16,
     overflow: "hidden",
-
     borderWidth: 1,
     borderColor: "#d4af37",
-
     shadowColor: "#a87900",
     shadowOffset: {
       width: 0,
@@ -1140,10 +1294,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     overflow: "hidden",
-
     borderTopWidth: 1,
     borderTopColor: "#f8e7a1",
-
     borderBottomWidth: 1,
     borderBottomColor: "#8c6500",
   },
@@ -1153,14 +1305,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     letterSpacing: 1.5,
-
     textShadowColor: "rgba(90, 60, 0, 0.45)",
-
     textShadowOffset: {
       width: 0,
       height: 1,
     },
-
     textShadowRadius: 2,
   },
 

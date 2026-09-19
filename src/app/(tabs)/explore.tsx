@@ -46,6 +46,8 @@ export default function ProductsScreen() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
 
+  const [catalogMode, setCatalogMode] = useState(false);
+
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
 
@@ -64,6 +66,7 @@ export default function ProductsScreen() {
       const [
         { data: productData, error: productsError },
         { data: categoryData, error: categoriesError },
+        { data: siteSettings, error: siteSettingsError },
       ] = await Promise.all([
         supabase
           .from("products")
@@ -90,6 +93,12 @@ export default function ProductsScreen() {
           .eq("is_active", true)
           .order("sort_order")
           .order("name"),
+
+        supabase
+          .from("site_settings")
+          .select("catalog_mode")
+          .eq("id", true)
+          .single(),
       ]);
 
       if (productsError) {
@@ -98,6 +107,10 @@ export default function ProductsScreen() {
 
       if (categoriesError) {
         throw categoriesError;
+      }
+
+      if (siteSettingsError) {
+        throw siteSettingsError;
       }
 
       const formattedProducts: Product[] = (productData ?? []).map(
@@ -127,6 +140,7 @@ export default function ProductsScreen() {
 
       setProducts(formattedProducts);
       setCategories(loadedCategories);
+      setCatalogMode(siteSettings?.catalog_mode === true);
     } catch (err) {
       console.error("Products loading error:", err);
       setError("Unable to load products.");
@@ -285,42 +299,44 @@ export default function ProductsScreen() {
             Sort
             ================================================= */}
 
-        <View style={styles.sortSection}>
-          <Text style={styles.resultCount}>
-            {filteredProducts.length}{" "}
-            {filteredProducts.length === 1 ? "product" : "products"}
-          </Text>
+        {!catalogMode && (
+          <View style={styles.sortSection}>
+            <Text style={styles.resultCount}>
+              {filteredProducts.length}{" "}
+              {filteredProducts.length === 1 ? "product" : "products"}
+            </Text>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.sortList}
-          >
-            <SortButton
-              title="Newest"
-              selected={sortBy === "newest"}
-              onPress={() => setSortBy("newest")}
-            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sortList}
+            >
+              <SortButton
+                title="Newest"
+                selected={sortBy === "newest"}
+                onPress={() => setSortBy("newest")}
+              />
 
-            <SortButton
-              title="Most expensive"
-              selected={sortBy === "most-expensive"}
-              onPress={() => setSortBy("most-expensive")}
-            />
+              <SortButton
+                title="Most expensive"
+                selected={sortBy === "most-expensive"}
+                onPress={() => setSortBy("most-expensive")}
+              />
 
-            <SortButton
-              title="Least expensive"
-              selected={sortBy === "least-expensive"}
-              onPress={() => setSortBy("least-expensive")}
-            />
+              <SortButton
+                title="Least expensive"
+                selected={sortBy === "least-expensive"}
+                onPress={() => setSortBy("least-expensive")}
+              />
 
-            <SortButton
-              title="Oldest"
-              selected={sortBy === "oldest"}
-              onPress={() => setSortBy("oldest")}
-            />
-          </ScrollView>
-        </View>
+              <SortButton
+                title="Oldest"
+                selected={sortBy === "oldest"}
+                onPress={() => setSortBy("oldest")}
+              />
+            </ScrollView>
+          </View>
+        )}
 
         {/* =================================================
             Products
@@ -329,7 +345,11 @@ export default function ProductsScreen() {
         {filteredProducts.length > 0 ? (
           <View style={styles.productGrid}>
             {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                catalogMode={catalogMode}
+              />
             ))}
           </View>
         ) : (
@@ -402,7 +422,13 @@ function SortButton({
    Product Card
    ========================================================= */
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({
+  product,
+  catalogMode,
+}: {
+  product: Product;
+  catalogMode: boolean;
+}) {
   const router = useRouter();
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -466,19 +492,20 @@ function ProductCard({ product }: { product: Product }) {
           {product.name}
         </Text>
 
-        {isOnSale ? (
-          <View style={styles.priceRow}>
-            <Text style={styles.salePrice}>
-              CHF {product.sale_price!.toFixed(2)}
-            </Text>
+        {!catalogMode &&
+          (isOnSale ? (
+            <View style={styles.priceRow}>
+              <Text style={styles.salePrice}>
+                CHF {product.sale_price!.toFixed(2)}
+              </Text>
 
-            <Text style={styles.originalPrice}>
-              CHF {product.price.toFixed(2)}
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.price}>CHF {product.price.toFixed(2)}</Text>
-        )}
+              <Text style={styles.originalPrice}>
+                CHF {product.price.toFixed(2)}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.price}>CHF {product.price.toFixed(2)}</Text>
+          ))}
       </View>
     </Pressable>
   );

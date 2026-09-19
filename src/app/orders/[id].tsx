@@ -7,11 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  useFocusEffect,
-  useLocalSearchParams,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "@/lib/supabase";
@@ -59,15 +55,11 @@ export default function OrderDetailScreen() {
     id: string;
   }>();
 
-  const [order, setOrder] = useState<Order | null>(
-    null,
-  );
-
+  const [order, setOrder] = useState<Order | null>(null);
+  const [catalogMode, setCatalogMode] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [error, setError] = useState<string | null>(
-    null,
-  );
+  const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,17 +84,25 @@ export default function OrderDetailScreen() {
       }
 
       if (!user) {
-        router.replace(
-          `/auth/login?redirectTo=/orders/${id}`,
-        );
+        router.replace(`/auth/login?redirectTo=/orders/${id}`);
         return;
       }
+      const { data: siteSettings, error: siteSettingsError } = await supabase
+        .from("site_settings")
+        .select("catalog_mode")
+        .eq("id", true)
+        .maybeSingle();
 
-      const { data, error: orderError } =
-        await supabase
-          .from("orders")
-          .select(
-            `
+      if (siteSettingsError) {
+        throw siteSettingsError;
+      }
+
+      setCatalogMode(Boolean(siteSettings?.catalog_mode));
+
+      const { data, error: orderError } = await supabase
+        .from("orders")
+        .select(
+          `
               id,
               order_number,
               status,
@@ -130,19 +130,17 @@ export default function OrderDetailScreen() {
                 total_price
               )
             `,
-          )
-          .eq("id", id)
-          .eq("user_id", user.id)
-          .maybeSingle();
+        )
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
       if (orderError) {
         throw orderError;
       }
 
       if (!data) {
-        setError(
-          "This order could not be found.",
-        );
+        setError("This order could not be found.");
         return;
       }
 
@@ -151,35 +149,22 @@ export default function OrderDetailScreen() {
 
         subtotal: Number(data.subtotal ?? 0),
 
-        shipping_cost: Number(
-          data.shipping_cost ?? 0,
-        ),
+        shipping_cost: Number(data.shipping_cost ?? 0),
 
         total: Number(data.total ?? 0),
 
-        order_items: (data.order_items ?? []).map(
-          (item) => ({
-            ...item,
-            unit_price: Number(
-              item.unit_price ?? 0,
-            ),
-            total_price: Number(
-              item.total_price ?? 0,
-            ),
-          }),
-        ),
+        order_items: (data.order_items ?? []).map((item) => ({
+          ...item,
+          unit_price: Number(item.unit_price ?? 0),
+          total_price: Number(item.total_price ?? 0),
+        })),
       };
 
       setOrder(formattedOrder);
     } catch (err) {
-      console.error(
-        "❌ Load order detail error:",
-        err,
-      );
+      console.error("❌ Load order detail error:", err);
 
-      setError(
-        "Unable to load this order. Please try again.",
-      );
+      setError("Unable to load this order. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -190,20 +175,15 @@ export default function OrderDetailScreen() {
       return null;
     }
 
-    return new Date(date).toLocaleDateString(
-      "en-CH",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      },
-    );
+    return new Date(date).toLocaleDateString("en-CH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   }
 
   function paymentLabel(method: string) {
-    return method === "twint"
-      ? "TWINT"
-      : "Bank Transfer";
+    return method === "twint" ? "TWINT" : "Bank Transfer";
   }
 
   if (loading) {
@@ -211,9 +191,7 @@ export default function OrderDetailScreen() {
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" />
 
-        <Text style={styles.loadingText}>
-          Loading order...
-        </Text>
+        <Text style={styles.loadingText}>Loading order...</Text>
       </SafeAreaView>
     );
   }
@@ -222,22 +200,17 @@ export default function OrderDetailScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centerContent}>
-          <Text style={styles.errorTitle}>
-            Order unavailable
-          </Text>
+          <Text style={styles.errorTitle}>Order unavailable</Text>
 
           <Text style={styles.errorMessage}>
-            {error ??
-              "This order could not be found."}
+            {error ?? "This order could not be found."}
           </Text>
 
           <Pressable
             style={styles.primaryButton}
             onPress={() => router.replace("/orders")}
           >
-            <Text style={styles.primaryButtonText}>
-              Back to my orders
-            </Text>
+            <Text style={styles.primaryButtonText}>Back to my orders</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -252,9 +225,7 @@ export default function OrderDetailScreen() {
     },
     {
       title: "Payment verified",
-      date: formatDate(
-        order.payment_verified_at,
-      ),
+      date: formatDate(order.payment_verified_at),
       done: !!order.payment_verified_at,
     },
     {
@@ -277,63 +248,41 @@ export default function OrderDetailScreen() {
       >
         {/* Header */}
 
-        <Pressable
-          onPress={() => router.replace("/orders")}
-          hitSlop={10}
-        >
-          <Text style={styles.backText}>
-            ← Back to my orders
-          </Text>
+        <Pressable onPress={() => router.replace("/orders")} hitSlop={10}>
+          <Text style={styles.backText}>← Back to my orders</Text>
         </Pressable>
 
         <View style={styles.header}>
-          <Text style={styles.title}>
-            Order {order.order_number}
-          </Text>
+          <Text style={styles.title}>Order {order.order_number}</Text>
 
-          <Text style={styles.date}>
-            {formatDate(order.created_at)}
-          </Text>
+          <Text style={styles.date}>{formatDate(order.created_at)}</Text>
         </View>
 
         {/* Status */}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Order status
-          </Text>
+          <Text style={styles.sectionTitle}>Order status</Text>
 
           <View style={styles.timeline}>
             {timeline.map((step, index) => (
-              <View
-                key={step.title}
-                style={styles.timelineRow}
-              >
+              <View key={step.title} style={styles.timelineRow}>
                 <View style={styles.timelineLeft}>
                   <View
                     style={[
                       styles.timelineCircle,
-                      step.done &&
-                        styles.timelineCircleDone,
+                      step.done && styles.timelineCircleDone,
                     ]}
                   >
                     {step.done ? (
-                      <Text
-                        style={styles.timelineCheck}
-                      >
-                        ✓
-                      </Text>
+                      <Text style={styles.timelineCheck}>✓</Text>
                     ) : null}
                   </View>
 
-                  {index <
-                    timeline.length - 1 && (
+                  {index < timeline.length - 1 && (
                     <View
                       style={[
                         styles.timelineLine,
-                        timeline[index + 1]
-                          .done &&
-                          styles.timelineLineDone,
+                        timeline[index + 1].done && styles.timelineLineDone,
                       ]}
                     />
                   )}
@@ -343,25 +292,16 @@ export default function OrderDetailScreen() {
                   <Text
                     style={[
                       styles.timelineTitle,
-                      step.done &&
-                        styles.timelineTitleDone,
+                      step.done && styles.timelineTitleDone,
                     ]}
                   >
                     {step.title}
                   </Text>
 
                   {step.date ? (
-                    <Text
-                      style={styles.timelineDate}
-                    >
-                      {step.date}
-                    </Text>
+                    <Text style={styles.timelineDate}>{step.date}</Text>
                   ) : (
-                    <Text
-                      style={styles.timelinePending}
-                    >
-                      Pending
-                    </Text>
+                    <Text style={styles.timelinePending}>Pending</Text>
                   )}
                 </View>
               </View>
@@ -372,32 +312,26 @@ export default function OrderDetailScreen() {
         {/* Order items */}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Order items
-          </Text>
+          <Text style={styles.sectionTitle}>Order items</Text>
 
           <View style={styles.items}>
             {order.order_items.map((item) => (
-              <View
-                key={item.id}
-                style={styles.item}
-              >
+              <View key={item.id} style={styles.item}>
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>
-                    {item.product_name}
-                  </Text>
+                  <Text style={styles.itemName}>{item.product_name}</Text>
 
                   <Text style={styles.itemQuantity}>
-                    CHF{" "}
-                    {item.unit_price.toFixed(2)} ×{" "}
-                    {item.quantity}
+                    {catalogMode
+                      ? `Quantity: ${item.quantity}`
+                      : `CHF ${item.unit_price.toFixed(2)} × ${item.quantity}`}
                   </Text>
                 </View>
 
-                <Text style={styles.itemTotal}>
-                  CHF{" "}
-                  {item.total_price.toFixed(2)}
-                </Text>
+                {!catalogMode ? (
+                  <Text style={styles.itemTotal}>
+                    CHF {item.total_price.toFixed(2)}
+                  </Text>
+                ) : null}
               </View>
             ))}
           </View>
@@ -406,31 +340,20 @@ export default function OrderDetailScreen() {
         {/* Shipping address */}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Shipping address
-          </Text>
+          <Text style={styles.sectionTitle}>Shipping address</Text>
 
           <View style={styles.address}>
-            <Text style={styles.addressName}>
-              {order.shipping_name}
-            </Text>
+            <Text style={styles.addressName}>{order.shipping_name}</Text>
+
+            <Text style={styles.addressText}>{order.shipping_address}</Text>
 
             <Text style={styles.addressText}>
-              {order.shipping_address}
+              {order.shipping_postal_code} {order.shipping_city}
             </Text>
 
-            <Text style={styles.addressText}>
-              {order.shipping_postal_code}{" "}
-              {order.shipping_city}
-            </Text>
+            <Text style={styles.addressText}>{order.shipping_country}</Text>
 
-            <Text style={styles.addressText}>
-              {order.shipping_country}
-            </Text>
-
-            <Text style={styles.addressPhone}>
-              {order.shipping_phone}
-            </Text>
+            <Text style={styles.addressPhone}>{order.shipping_phone}</Text>
           </View>
         </View>
 
@@ -438,89 +361,75 @@ export default function OrderDetailScreen() {
 
         {order.customer_note ? (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>
-              Note
-            </Text>
+            <Text style={styles.sectionTitle}>Note</Text>
 
-            <Text style={styles.note}>
-              {order.customer_note}
-            </Text>
+            <Text style={styles.note}>{order.customer_note}</Text>
           </View>
         ) : null}
 
         {/* Payment */}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Payment
-          </Text>
+          <Text style={styles.sectionTitle}>Payment</Text>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Method
-            </Text>
+            <Text style={styles.detailLabel}>Method</Text>
 
             <Text style={styles.detailValue}>
-              {paymentLabel(
-                order.payment_method,
-              )}
+              {paymentLabel(order.payment_method)}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Status
-            </Text>
+            <Text style={styles.detailLabel}>Status</Text>
 
-            <Text style={styles.detailValue}>
-              {order.payment_status}
-            </Text>
+            <Text style={styles.detailValue}>{order.payment_status}</Text>
           </View>
         </View>
 
         {/* Summary */}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Order summary
-          </Text>
+       {!catalogMode ? (
+  <View style={styles.card}>
+    <Text style={styles.sectionTitle}>
+      Order summary
+    </Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Subtotal
-            </Text>
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>
+        Subtotal
+      </Text>
 
-            <Text style={styles.detailValue}>
-              CHF {order.subtotal.toFixed(2)}
-            </Text>
-          </View>
+      <Text style={styles.detailValue}>
+        CHF {order.subtotal.toFixed(2)}
+      </Text>
+    </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Shipping
-            </Text>
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>
+        Shipping
+      </Text>
 
-            <Text style={styles.detailValue}>
-              {order.shipping_cost === 0
-                ? "FREE"
-                : `CHF ${order.shipping_cost.toFixed(
-                    2,
-                  )}`}
-            </Text>
-          </View>
+      <Text style={styles.detailValue}>
+        {order.shipping_cost === 0
+          ? "FREE"
+          : `CHF ${order.shipping_cost.toFixed(2)}`}
+      </Text>
+    </View>
 
-          <View style={styles.divider} />
+    <View style={styles.divider} />
 
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>
-              Total
-            </Text>
+    <View style={styles.totalRow}>
+      <Text style={styles.totalLabel}>
+        Total
+      </Text>
 
-            <Text style={styles.totalValue}>
-              CHF {order.total.toFixed(2)}
-            </Text>
-          </View>
-        </View>
+      <Text style={styles.totalValue}>
+        CHF {order.total.toFixed(2)}
+      </Text>
+    </View>
+  </View>
+) : null}
 
         {/* Bottom button */}
 
@@ -528,9 +437,7 @@ export default function OrderDetailScreen() {
           style={styles.primaryButton}
           onPress={() => router.replace("/orders")}
         >
-          <Text style={styles.primaryButtonText}>
-            Back to my orders
-          </Text>
+          <Text style={styles.primaryButtonText}>Back to my orders</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -563,8 +470,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
   },
-
-  
 
   container: {
     paddingHorizontal: 20,
@@ -601,8 +506,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 15,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   sectionTitle: {

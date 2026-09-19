@@ -1,3 +1,6 @@
+import { notifyNotificationsChanged, supabase } from "@/lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -9,10 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "@/lib/supabase";
 
 type Notification = {
   id: string;
@@ -176,6 +176,8 @@ export default function NotificationsScreen() {
           read_at: notification.read_at ?? readAt,
         })),
       );
+
+      notifyNotificationsChanged();
     } catch (error) {
       console.error("Failed to mark all notifications as read:", error);
 
@@ -217,6 +219,8 @@ export default function NotificationsScreen() {
           : item,
       ),
     );
+
+    notifyNotificationsChanged();
   };
 
   const handleNotificationPress = async (notification: Notification) => {

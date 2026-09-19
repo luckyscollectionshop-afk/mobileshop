@@ -1,4 +1,3 @@
-
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -82,11 +81,11 @@ export default function CheckoutScreen() {
 
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const [settings, setSettings] =
-    useState<StorefrontSettings | null>(null);
+  const [settings, setSettings] = useState<StorefrontSettings | null>(null);
 
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
+
+  const [catalogMode, setCatalogMode] = useState(false);
 
   /* =========================================================
      Editable checkout address fields
@@ -141,15 +140,12 @@ export default function CheckoutScreen() {
          Load profile, cart and storefront settings
          ----------------------------------------------------- */
 
-      const [
-        profileResult,
-        cartResult,
-        settingsResult,
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            `
+      const [profileResult, cartResult, settingsResult, siteSettingsResult] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select(
+              `
               id,
               full_name,
               phone,
@@ -158,20 +154,20 @@ export default function CheckoutScreen() {
               postal_code,
               country
             `,
-          )
-          .eq("id", user.id)
-          .maybeSingle(),
+            )
+            .eq("id", user.id)
+            .maybeSingle(),
 
-        supabase
-          .from("carts")
-          .select("id")
-          .eq("user_id", user.id)
-          .maybeSingle(),
+          supabase
+            .from("carts")
+            .select("id")
+            .eq("user_id", user.id)
+            .maybeSingle(),
 
-        supabase
-          .from("storefront_settings")
-          .select(
-            `
+          supabase
+            .from("storefront_settings")
+            .select(
+              `
               twint_enabled,
               twint_phone,
               bank_transfer_enabled,
@@ -182,26 +178,28 @@ export default function CheckoutScreen() {
               shipping_price,
               free_shipping
             `,
-          )
-          .limit(1)
-          .maybeSingle(),
-      ]);
+            )
+            .limit(1)
+            .maybeSingle(),
+
+          supabase
+            .from("site_settings")
+            .select("catalog_mode")
+            .eq("id", true)
+            .maybeSingle(),
+        ]);
 
       /* -----------------------------------------------------
          Profile
          ----------------------------------------------------- */
 
       if (profileResult.error) {
-        console.error(
-          "❌ PROFILE QUERY ERROR:",
-          profileResult.error,
-        );
+        console.error("❌ PROFILE QUERY ERROR:", profileResult.error);
 
         throw profileResult.error;
       }
 
-      const loadedProfile =
-        profileResult.data as Profile | null;
+      const loadedProfile = profileResult.data as Profile | null;
 
       //console.log(        "✅ CHECKOUT PROFILE:",        loadedProfile,      );
 
@@ -211,30 +209,17 @@ export default function CheckoutScreen() {
          Populate editable checkout fields from profile
          ----------------------------------------------------- */
 
-      setFullName(
-        loadedProfile?.full_name ?? "",
-      );
+      setFullName(loadedProfile?.full_name ?? "");
 
-      setPhone(
-        loadedProfile?.phone ?? "",
-      );
+      setPhone(loadedProfile?.phone ?? "");
 
-      setAddress(
-        loadedProfile?.address ?? "",
-      );
+      setAddress(loadedProfile?.address ?? "");
 
-      setPostalCode(
-        loadedProfile?.postal_code ?? "",
-      );
+      setPostalCode(loadedProfile?.postal_code ?? "");
 
-      setCity(
-        loadedProfile?.city ?? "",
-      );
+      setCity(loadedProfile?.city ?? "");
 
-      setCountry(
-        loadedProfile?.country ||
-          "Switzerland",
-      );
+      setCountry(loadedProfile?.country || "Switzerland");
 
       /* -----------------------------------------------------
          Storefront settings
@@ -247,28 +232,17 @@ export default function CheckoutScreen() {
       if (settingsResult.data) {
         setSettings({
           ...settingsResult.data,
-          shipping_price: Number(
-            settingsResult.data
-              .shipping_price ?? 0,
-          ),
+          shipping_price: Number(settingsResult.data.shipping_price ?? 0),
         } as StorefrontSettings);
 
         /* ---------------------------------------------------
            Automatically select first available payment
            --------------------------------------------------- */
 
-        if (
-          settingsResult.data
-            .twint_enabled
-        ) {
+        if (settingsResult.data.twint_enabled) {
           setPaymentMethod("twint");
-        } else if (
-          settingsResult.data
-            .bank_transfer_enabled
-        ) {
-          setPaymentMethod(
-            "bank_transfer",
-          );
+        } else if (settingsResult.data.bank_transfer_enabled) {
+          setPaymentMethod("bank_transfer");
         } else {
           setPaymentMethod(null);
         }
@@ -276,7 +250,11 @@ export default function CheckoutScreen() {
         setSettings(null);
         setPaymentMethod(null);
       }
+      if (siteSettingsResult.error) {
+        throw siteSettingsResult.error;
+      }
 
+      setCatalogMode(Boolean(siteSettingsResult.data?.catalog_mode));
       /* -----------------------------------------------------
          Cart
          ----------------------------------------------------- */
@@ -292,10 +270,7 @@ export default function CheckoutScreen() {
         return;
       }
 
-      const {
-        data: cartItems,
-        error: cartItemsError,
-      } = await supabase
+      const { data: cartItems, error: cartItemsError } = await supabase
         .from("cart_items")
         .select(
           `
@@ -327,102 +302,66 @@ export default function CheckoutScreen() {
         throw cartItemsError;
       }
 
-      const formattedItems: CartItem[] =
-        (cartItems ?? []).flatMap(
-          (item) => {
-            const product = item.products as
-              | CartProduct
-              | CartProduct[]
-              | null;
+      const formattedItems: CartItem[] = (cartItems ?? []).flatMap((item) => {
+        const product = item.products as CartProduct | CartProduct[] | null;
 
-            const actualProduct =
-              Array.isArray(product)
-                ? product[0]
-                : product;
+        const actualProduct = Array.isArray(product) ? product[0] : product;
 
-            if (!actualProduct) {
-              return [];
-            }
+        if (!actualProduct) {
+          return [];
+        }
 
-            return [
-              {
-                id: item.id,
-                quantity: item.quantity,
-                product: {
-                  ...actualProduct,
+        return [
+          {
+            id: item.id,
+            quantity: item.quantity,
+            product: {
+              ...actualProduct,
 
-                  price: Number(
-                    actualProduct.price,
-                  ),
+              price: Number(actualProduct.price),
 
-                  sale_price:
-                    actualProduct.sale_price ==
-                    null
-                      ? null
-                      : Number(
-                          actualProduct.sale_price,
-                        ),
+              sale_price:
+                actualProduct.sale_price == null
+                  ? null
+                  : Number(actualProduct.sale_price),
 
-                  stock:
-                    actualProduct.stock ?? 0,
+              stock: actualProduct.stock ?? 0,
 
-                  images:
-                    Array.isArray(
-                      actualProduct.images,
-                    )
-                      ? actualProduct.images
-                      : [],
+              images: Array.isArray(actualProduct.images)
+                ? actualProduct.images
+                : [],
 
-                  weight_grams:
-                    actualProduct.weight_grams ==
-                    null
-                      ? null
-                      : Number(
-                          actualProduct.weight_grams,
-                        ),
+              weight_grams:
+                actualProduct.weight_grams == null
+                  ? null
+                  : Number(actualProduct.weight_grams),
 
-                  height:
-                    actualProduct.height ==
-                    null
-                      ? null
-                      : Number(
-                          actualProduct.height,
-                        ),
+              height:
+                actualProduct.height == null
+                  ? null
+                  : Number(actualProduct.height),
 
-                  width:
-                    actualProduct.width ==
-                    null
-                      ? null
-                      : Number(
-                          actualProduct.width,
-                        ),
+              width:
+                actualProduct.width == null
+                  ? null
+                  : Number(actualProduct.width),
 
-                  depth:
-                    actualProduct.depth ==
-                    null
-                      ? null
-                      : Number(
-                          actualProduct.depth,
-                        ),
-                },
-              },
-            ];
+              depth:
+                actualProduct.depth == null
+                  ? null
+                  : Number(actualProduct.depth),
+            },
           },
-        );
+        ];
+      });
 
       //console.log(        "✅ CHECKOUT CART ITEMS:",        formattedItems.length,      );
 
       setItems(formattedItems);
     } catch (error) {
-      console.error(
-        "❌ Checkout loading error:",
-        error,
-      );
+      console.error("❌ Checkout loading error:", error);
 
-      Alert.alert(
-        "Unable to load checkout",
-        "Please try again.",
-      );
+      Alert.alert("Unable to load checkout", "Please try again.");
     } finally {
       setLoading(false);
 
@@ -449,23 +388,17 @@ export default function CheckoutScreen() {
         return false;
       }
 
-      const trimmedFullName =
-        fullName.trim();
+      const trimmedFullName = fullName.trim();
 
-      const trimmedPhone =
-        phone.trim();
+      const trimmedPhone = phone.trim();
 
-      const trimmedAddress =
-        address.trim();
+      const trimmedAddress = address.trim();
 
-      const trimmedPostalCode =
-        postalCode.trim();
+      const trimmedPostalCode = postalCode.trim();
 
-      const trimmedCity =
-        city.trim();
+      const trimmedCity = city.trim();
 
-      const trimmedCountry =
-        country.trim();
+      const trimmedCountry = country.trim();
 
       if (
         !trimmedFullName ||
@@ -488,23 +421,17 @@ export default function CheckoutScreen() {
       const { error } = await supabase
         .from("profiles")
         .update({
-          full_name:
-            trimmedFullName,
+          full_name: trimmedFullName,
           phone: trimmedPhone,
           address: trimmedAddress,
-          postal_code:
-            trimmedPostalCode,
+          postal_code: trimmedPostalCode,
           city: trimmedCity,
-          country:
-            trimmedCountry,
+          country: trimmedCountry,
         })
         .eq("id", user.id);
 
       if (error) {
-        console.error(
-          "❌ PROFILE UPDATE ERROR:",
-          error,
-        );
+        console.error("❌ PROFILE UPDATE ERROR:", error);
 
         throw error;
       }
@@ -522,28 +449,19 @@ export default function CheckoutScreen() {
           country: null,
         }),
 
-        full_name:
-          trimmedFullName,
+        full_name: trimmedFullName,
         phone: trimmedPhone,
         address: trimmedAddress,
-        postal_code:
-          trimmedPostalCode,
+        postal_code: trimmedPostalCode,
         city: trimmedCity,
-        country:
-          trimmedCountry,
+        country: trimmedCountry,
       }));
 
       return true;
     } catch (error) {
-      console.error(
-        "❌ Saving checkout address failed:",
-        error,
-      );
+      console.error("❌ Saving checkout address failed:", error);
 
-      Alert.alert(
-        "Unable to save address",
-        "Please try again.",
-      );
+      Alert.alert("Unable to save address", "Please try again.");
 
       return false;
     }
@@ -632,10 +550,7 @@ export default function CheckoutScreen() {
          Validate payment method
          ----------------------------------------------------- */
 
-      if (
-        paymentMethod !== "twint" &&
-        paymentMethod !== "bank_transfer"
-      ) {
+      if (paymentMethod !== "twint" && paymentMethod !== "bank_transfer") {
         Alert.alert(
           "Payment method required",
           "Please select a payment method.",
@@ -661,16 +576,13 @@ export default function CheckoutScreen() {
          API URL
          ----------------------------------------------------- */
 
-      const apiBaseUrl =
-        process.env.EXPO_PUBLIC_WEB_API_URL?.replace(
-          /\/$/,
-          "",
-        );
+      const apiBaseUrl = process.env.EXPO_PUBLIC_WEB_API_URL?.replace(
+        /\/$/,
+        "",
+      );
 
       if (!apiBaseUrl) {
-        throw new Error(
-          "Web API URL is not configured.",
-        );
+        throw new Error("Web API URL is not configured.");
       }
 
       //console.log(        "🌐 MOBILE ORDER API:",        `${apiBaseUrl}/api/orders`,      );
@@ -679,27 +591,24 @@ export default function CheckoutScreen() {
          Create order through the deployed web API
          ----------------------------------------------------- */
 
-      const response = await fetch(
-        `${apiBaseUrl}/api/orders`,
-        {
-          method: "POST",
+      const response = await fetch(`${apiBaseUrl}/api/orders`, {
+        method: "POST",
 
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-
-          body: JSON.stringify({
-            full_name: trimmedFullName,
-            phone: trimmedPhone,
-            address: trimmedAddress,
-            city: trimmedCity,
-            postal_code: trimmedPostalCode,
-            country: trimmedCountry,
-            payment_method: paymentMethod,
-          }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
-      );
+
+        body: JSON.stringify({
+          full_name: trimmedFullName,
+          phone: trimmedPhone,
+          address: trimmedAddress,
+          city: trimmedCity,
+          postal_code: trimmedPostalCode,
+          country: trimmedCountry,
+          payment_method: paymentMethod,
+        }),
+      });
 
       /* -----------------------------------------------------
          Read API response
@@ -738,24 +647,15 @@ export default function CheckoutScreen() {
          ----------------------------------------------------- */
 
       if (!response.ok) {
-        throw new Error(
-          result.error ||
-            "Unable to place your order.",
-        );
+        throw new Error(result.error || "Unable to place your order.");
       }
 
       /* -----------------------------------------------------
          Verify successful response
          ----------------------------------------------------- */
 
-      if (
-        !result.success ||
-        !result.order_id ||
-        !result.order_number
-      ) {
-        throw new Error(
-          "The order was not created successfully.",
-        );
+      if (!result.success || !result.order_id || !result.order_number) {
+        throw new Error("The order was not created successfully.");
       }
 
       //console.log(        "🎉 MOBILE ORDER CREATED:",        result.order_number,      );
@@ -768,16 +668,13 @@ export default function CheckoutScreen() {
          ----------------------------------------------------- */
 
       router.replace({
-  pathname: "/order-success",
-  params: {
-    order: result.order_number,
-  },
-});
+        pathname: "/order-success",
+        params: {
+          order: result.order_number,
+        },
+      });
     } catch (error) {
-      console.error(
-        "❌ MOBILE PLACE ORDER ERROR:",
-        error,
-      );
+      console.error("❌ MOBILE PLACE ORDER ERROR:", error);
 
       Alert.alert(
         "Unable to place order",
@@ -797,46 +694,21 @@ export default function CheckoutScreen() {
 
   if (!loading && items.length === 0) {
     return (
-      <SafeAreaView
-        style={styles.safeArea} edges={[]}
-      >
-        <View
-          style={styles.emptyContainer}
-        >
-          <Text
-            style={styles.emptyIcon}
-          >
-            🛒
-          </Text>
+      <SafeAreaView style={styles.safeArea} edges={[]}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>🛒</Text>
 
-          <Text
-            style={styles.emptyTitle}
-          >
-            Your cart is empty
-          </Text>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
 
-          <Text
-            style={styles.emptyText}
-          >
-            Add products to your cart
-            before checking out.
+          <Text style={styles.emptyText}>
+            Add products to your cart before checking out.
           </Text>
 
           <Pressable
             style={styles.primaryButton}
-            onPress={() =>
-              router.replace(
-                "/explore",
-              )
-            }
+            onPress={() => router.replace("/explore")}
           >
-            <Text
-              style={
-                styles.primaryButtonText
-              }
-            >
-              Continue shopping
-            </Text>
+            <Text style={styles.primaryButtonText}>Continue shopping</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -849,18 +721,10 @@ export default function CheckoutScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={styles.center}
-      >
-        <ActivityIndicator
-          size="large"
-        />
+      <SafeAreaView style={styles.center}>
+        <ActivityIndicator size="large" />
 
-        <Text
-          style={styles.loadingText}
-        >
-          Loading checkout...
-        </Text>
+        <Text style={styles.loadingText}>Loading checkout...</Text>
       </SafeAreaView>
     );
   }
@@ -869,38 +733,25 @@ export default function CheckoutScreen() {
      TOTALS
      ========================================================= */
 
-  const subtotal = items.reduce(
-    (total, item) => {
-      const price =
-        item.product.sale_price !==
-        null
-          ? item.product.sale_price
-          : item.product.price;
+  const subtotal = items.reduce((total, item) => {
+    const price =
+      item.product.sale_price !== null
+        ? item.product.sale_price
+        : item.product.price;
 
-      return (
-        total +
-        price * item.quantity
-      );
-    },
-    0,
-  );
+    return total + price * item.quantity;
+  }, 0);
 
   const shippingCost =
-    settings?.shipping_enabled &&
-    !settings.free_shipping
-      ? Number(
-          settings.shipping_price ?? 0,
-        )
+    settings?.shipping_enabled && !settings.free_shipping
+      ? Number(settings.shipping_price ?? 0)
       : 0;
 
-  const total =
-    subtotal + shippingCost;
+  const total = subtotal + shippingCost;
 
-  const hasPaymentMethod =
-    !!(
-      settings?.twint_enabled ||
-      settings?.bank_transfer_enabled
-    );
+  const hasPaymentMethod = !!(
+    settings?.twint_enabled || settings?.bank_transfer_enabled
+  );
 
   const addressComplete =
     fullName.trim().length > 0 &&
@@ -915,43 +766,23 @@ export default function CheckoutScreen() {
      ========================================================= */
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-    >
+    <SafeAreaView style={styles.safeArea}>
       <ScrollView
-        showsVerticalScrollIndicator={
-          false
-        }
-        contentContainerStyle={
-          styles.container
-        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.container}
       >
         {/* ===================================================
             PAGE TITLE
            =================================================== */}
 
-        <View
-          style={styles.headerRow}
-        >
-          <Pressable
-            onPress={() =>
-              router.back()
-            }
-          >
-            <Text
-              style={styles.backText}
-            >
-              ← Back
-            </Text>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()}>
+            <Text style={styles.backText}>← Back</Text>
           </Pressable>
 
-          <Text style={styles.title}>
-            Checkout
-          </Text>
+          <Text style={styles.title}>Checkout</Text>
 
-          <View
-            style={styles.headerSpacer}
-          />
+          <View style={styles.headerSpacer} />
         </View>
 
         {/* ===================================================
@@ -959,22 +790,12 @@ export default function CheckoutScreen() {
            =================================================== */}
 
         <View style={styles.section}>
-          <Text
-            style={styles.sectionTitle}
-          >
-            1. Shipping address
-          </Text>
+          <Text style={styles.sectionTitle}>1. Shipping address</Text>
 
-          <View
-            style={styles.addressCard}
-          >
-            <Text
-              style={styles.addressHint}
-            >
-              Your current delivery
-              details are shown below.
-              You can edit them if
-              needed.
+          <View style={styles.addressCard}>
+            <Text style={styles.addressHint}>
+              Your current delivery details are shown below. You can edit them
+              if needed.
             </Text>
 
             <TextInput
@@ -1002,21 +823,14 @@ export default function CheckoutScreen() {
               style={styles.input}
             />
 
-            <View
-              style={styles.inputRow}
-            >
+            <View style={styles.inputRow}>
               <TextInput
                 value={postalCode}
-                onChangeText={
-                  setPostalCode
-                }
+                onChangeText={setPostalCode}
                 placeholder="Postal code"
                 placeholderTextColor="#999"
                 keyboardType="number-pad"
-                style={[
-                  styles.input,
-                  styles.postalInput,
-                ]}
+                style={[styles.input, styles.postalInput]}
               />
 
               <TextInput
@@ -1024,10 +838,7 @@ export default function CheckoutScreen() {
                 onChangeText={setCity}
                 placeholder="City"
                 placeholderTextColor="#999"
-                style={[
-                  styles.input,
-                  styles.cityInput,
-                ]}
+                style={[styles.input, styles.cityInput]}
               />
             </View>
 
@@ -1039,12 +850,8 @@ export default function CheckoutScreen() {
               style={styles.input}
             />
 
-            <Text
-              style={styles.profileNote}
-            >
-              Changes made here will
-              update your saved account
-              details.
+            <Text style={styles.profileNote}>
+              Changes made here will update your saved account details.
             </Text>
           </View>
         </View>
@@ -1054,86 +861,40 @@ export default function CheckoutScreen() {
            =================================================== */}
 
         <View style={styles.section}>
-          <Text
-            style={styles.sectionTitle}
-          >
-            2. Payment method
-          </Text>
+          <Text style={styles.sectionTitle}>2. Payment method</Text>
 
           {!hasPaymentMethod ? (
-            <View
-              style={styles.warningBox}
-            >
-              <Text
-                style={styles.warningText}
-              >
-                No payment method is
-                currently available.
+            <View style={styles.warningBox}>
+              <Text style={styles.warningText}>
+                No payment method is currently available.
               </Text>
             </View>
           ) : (
-            <View
-              style={styles.paymentList}
-            >
+            <View style={styles.paymentList}>
               {settings?.twint_enabled && (
                 <Pressable
-                  onPress={() =>
-                    setPaymentMethod(
-                      "twint",
-                    )
-                  }
+                  onPress={() => setPaymentMethod("twint")}
                   style={[
                     styles.paymentCard,
-                    paymentMethod ===
-                      "twint" &&
-                      styles.paymentCardSelected,
+                    paymentMethod === "twint" && styles.paymentCardSelected,
                   ]}
                 >
-                  <View
-                    style={
-                      styles.paymentRadio
-                    }
-                  >
-                    {paymentMethod ===
-                      "twint" && (
-                      <View
-                        style={
-                          styles.paymentDot
-                        }
-                      />
+                  <View style={styles.paymentRadio}>
+                    {paymentMethod === "twint" && (
+                      <View style={styles.paymentDot} />
                     )}
                   </View>
 
-                  <View
-                    style={
-                      styles.paymentContent
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.paymentTitle
-                      }
-                    >
-                      TWINT
-                    </Text>
+                  <View style={styles.paymentContent}>
+                    <Text style={styles.paymentTitle}>TWINT</Text>
 
-                    <Text
-                      style={
-                        styles.paymentDescription
-                      }
-                    >
+                    <Text style={styles.paymentDescription}>
                       Pay using TWINT
                     </Text>
 
                     {settings.twint_phone && (
-                      <Text
-                        style={
-                          styles.paymentInfo
-                        }
-                      >
-                        {
-                          settings.twint_phone
-                        }
+                      <Text style={styles.paymentInfo}>
+                        {settings.twint_phone}
                       </Text>
                     )}
                   </View>
@@ -1142,72 +903,34 @@ export default function CheckoutScreen() {
 
               {settings?.bank_transfer_enabled && (
                 <Pressable
-                  onPress={() =>
-                    setPaymentMethod(
-                      "bank_transfer",
-                    )
-                  }
+                  onPress={() => setPaymentMethod("bank_transfer")}
                   style={[
                     styles.paymentCard,
-                    paymentMethod ===
-                      "bank_transfer" &&
+                    paymentMethod === "bank_transfer" &&
                       styles.paymentCardSelected,
                   ]}
                 >
-                  <View
-                    style={
-                      styles.paymentRadio
-                    }
-                  >
-                    {paymentMethod ===
-                      "bank_transfer" && (
-                      <View
-                        style={
-                          styles.paymentDot
-                        }
-                      />
+                  <View style={styles.paymentRadio}>
+                    {paymentMethod === "bank_transfer" && (
+                      <View style={styles.paymentDot} />
                     )}
                   </View>
 
-                  <View
-                    style={
-                      styles.paymentContent
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.paymentTitle
-                      }
-                    >
-                      Bank transfer
-                    </Text>
+                  <View style={styles.paymentContent}>
+                    <Text style={styles.paymentTitle}>Bank transfer</Text>
 
-                    <Text
-                      style={
-                        styles.paymentDescription
-                      }
-                    >
+                    <Text style={styles.paymentDescription}>
                       Pay by bank transfer
                     </Text>
 
                     {settings.bank_account_name && (
-                      <Text
-                        style={
-                          styles.paymentInfo
-                        }
-                      >
-                        {
-                          settings.bank_account_name
-                        }
+                      <Text style={styles.paymentInfo}>
+                        {settings.bank_account_name}
                       </Text>
                     )}
 
                     {settings.bank_iban && (
-                      <Text
-                        style={
-                          styles.paymentInfo
-                        }
-                      >
+                      <Text style={styles.paymentInfo}>
                         {settings.bank_iban}
                       </Text>
                     )}
@@ -1223,86 +946,39 @@ export default function CheckoutScreen() {
            =================================================== */}
 
         <View style={styles.section}>
-          <Text
-            style={styles.sectionTitle}
-          >
-            3. Shipping
-          </Text>
+          <Text style={styles.sectionTitle}>3. Shipping</Text>
 
           {!settings?.shipping_enabled ? (
-            <View
-              style={styles.infoBox}
-            >
-              <Text
-                style={styles.infoText}
-              >
-                Shipping is not enabled.
-              </Text>
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>Shipping is not enabled.</Text>
             </View>
           ) : settings.free_shipping ? (
-            <View
-              style={styles.shippingCard}
-            >
+            <View style={styles.shippingCard}>
               <View>
-                <Text
-                  style={
-                    styles.shippingTitle
-                  }
-                >
-                  {settings.shipping_method ||
-                    "Shipping"}
+                <Text style={styles.shippingTitle}>
+                  {settings.shipping_method || "Shipping"}
                 </Text>
 
-                <Text
-                  style={
-                    styles.shippingDescription
-                  }
-                >
-                  Free shipping
-                </Text>
+                <Text style={styles.shippingDescription}>Free shipping</Text>
               </View>
 
-              <Text
-                style={
-                  styles.shippingPrice
-                }
-              >
-                FREE
-              </Text>
+              <Text style={styles.shippingPrice}>FREE</Text>
             </View>
           ) : (
-            <View
-              style={styles.shippingCard}
-            >
+            <View style={styles.shippingCard}>
               <View>
-                <Text
-                  style={
-                    styles.shippingTitle
-                  }
-                >
-                  {settings.shipping_method ||
-                    "Shipping"}
+                <Text style={styles.shippingTitle}>
+                  {settings.shipping_method || "Shipping"}
                 </Text>
 
-                <Text
-                  style={
-                    styles.shippingDescription
-                  }
-                >
-                  Shipping fee
-                </Text>
+                <Text style={styles.shippingDescription}>Shipping fee</Text>
               </View>
 
-              <Text
-                style={
-                  styles.shippingPrice
-                }
-              >
-                CHF{" "}
-                {shippingCost.toFixed(
-                  2,
-                )}
-              </Text>
+              {!catalogMode && (
+                <Text style={styles.shippingPrice}>
+                  CHF {shippingCost.toFixed(2)}
+                </Text>
+              )}
             </View>
           )}
         </View>
@@ -1312,232 +988,133 @@ export default function CheckoutScreen() {
            =================================================== */}
 
         <View style={styles.section}>
-          <Text
-            style={styles.sectionTitle}
-          >
-            4. Order summary
-          </Text>
+          <Text style={styles.sectionTitle}>4. Order summary</Text>
 
-          <View
-            style={styles.summaryCard}
-          >
+          <View style={styles.summaryCard}>
             {items.map((item) => {
               const price =
-                item.product.sale_price !==
-                null
-                  ? item.product
-                      .sale_price
+                item.product.sale_price !== null
+                  ? item.product.sale_price
                   : item.product.price;
 
-              const lineTotal =
-                price *
-                item.quantity;
+              const lineTotal = price * item.quantity;
 
-              const image =
-                item.product.images?.[0] ??
-                null;
+              const image = item.product.images?.[0] ?? null;
 
               return (
-                <View
-                  key={item.id}
-                  style={
-                    styles.summaryItem
-                  }
-                >
-                  <View
-                    style={
-                      styles.summaryImageContainer
-                    }
-                  >
+                <View key={item.id} style={styles.summaryItem}>
+                  <View style={styles.summaryImageContainer}>
                     {image ? (
                       <Image
                         source={{
                           uri: image,
                         }}
-                        style={
-                          styles.summaryImage
-                        }
+                        style={styles.summaryImage}
                         contentFit="cover"
                       />
                     ) : (
-                      <View
-                        style={
-                          styles.noImage
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.noImageText
-                          }
-                        >
-                          —
-                        </Text>
+                      <View style={styles.noImage}>
+                        <Text style={styles.noImageText}>—</Text>
                       </View>
                     )}
                   </View>
 
-                  <View
-                    style={
-                      styles.summaryItemInfo
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.summaryItemName
-                      }
-                      numberOfLines={2}
-                    >
-                      {
-                        item.product.name
-                      }
+                  <View style={styles.summaryItemInfo}>
+                    <Text style={styles.summaryItemName} numberOfLines={2}>
+                      {item.product.name}
                     </Text>
 
-                    <Text
-                      style={
-                        styles.summaryItemQuantity
-                      }
-                    >
-                      Qty:{" "}
-                      {item.quantity}
+                    <Text style={styles.summaryItemQuantity}>
+                      Qty: {item.quantity}
                     </Text>
                   </View>
 
-                  <Text
-                    style={
-                      styles.summaryItemPrice
-                    }
-                  >
-                    CHF{" "}
-                    {lineTotal.toFixed(
-                      2,
-                    )}
-                  </Text>
+                  {!catalogMode && (
+                    <Text style={styles.summaryItemPrice}>
+                      CHF {lineTotal.toFixed(2)}
+                    </Text>
+                  )}
                 </View>
               );
             })}
 
-            <View
-              style={styles.divider}
-            />
+            <View style={styles.divider} />
 
-            <View
-              style={styles.totalRow}
-            >
-              <Text
-                style={styles.totalLabel}
-              >
-                Subtotal
-              </Text>
+            {!catalogMode && (
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Subtotal</Text>
 
-              <Text
-                style={styles.totalValue}
-              >
-                CHF{" "}
-                {subtotal.toFixed(2)}
-              </Text>
-            </View>
+                <Text style={styles.totalValue}>CHF {subtotal.toFixed(2)}</Text>
+              </View>
+            )}
 
-            <View
-              style={styles.totalRow}
-            >
-              <Text
-                style={styles.totalLabel}
-              >
-                Shipping
-              </Text>
+            {!catalogMode && (
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Shipping</Text>
 
-              <Text
-                style={styles.totalValue}
-              >
-                {shippingCost === 0
-                  ? "FREE"
-                  : `CHF ${shippingCost.toFixed(
-                      2,
-                    )}`}
-              </Text>
-            </View>
+                <Text style={styles.totalValue}>
+                  {shippingCost === 0
+                    ? "FREE"
+                    : `CHF ${shippingCost.toFixed(2)}`}
+                </Text>
+              </View>
+            )}
 
-            <View
-              style={styles.divider}
-            />
+            <View style={styles.divider} />
 
-            <View
-              style={
-                styles.grandTotalRow
-              }
-            >
-              <Text
-                style={
-                  styles.grandTotalLabel
-                }
-              >
-                Total
-              </Text>
+            {!catalogMode && (
+              <View style={styles.grandTotalRow}>
+                <Text style={styles.grandTotalLabel}>Total</Text>
 
-              <Text
-                style={
-                  styles.grandTotalValue
-                }
-              >
-                CHF{" "}
-                {total.toFixed(2)}
-              </Text>
-            </View>
+                <Text style={styles.grandTotalValue}>
+                  CHF {total.toFixed(2)}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
+
+        {catalogMode && (
+  <View style={styles.catalogNote}>
+    <Text style={styles.catalogNoteText}>
+      This shop is currently in catalog mode. Prices will be
+      confirmed by the shop after your order is received.
+    </Text>
+  </View>
+)}
 
         {/* ===================================================
             PLACE ORDER
            =================================================== */}
 
-       <Pressable
-  style={[
-    styles.placeOrderButton,
-    (!hasPaymentMethod ||
-      !addressComplete ||
-      placingOrder) &&
-      styles.placeOrderDisabled,
-  ]}
-  disabled={
-    !hasPaymentMethod ||
-    !addressComplete ||
-    placingOrder
-  }
-  onPress={placeOrder}
->
-  {placingOrder ? (
-    <View style={styles.placeOrderLoading}>
-      <ActivityIndicator
-        size="small"
-        color="#fff"
-      />
-      <Text style={styles.placeOrderText}>
-        Placing order...
-      </Text>
-    </View>
-  ) : (
-    <Text style={styles.placeOrderText}>
-      Place order
-    </Text>
-  )}
-</Pressable>
+        <Pressable
+          style={[
+            styles.placeOrderButton,
+            (!hasPaymentMethod || !addressComplete || placingOrder) &&
+              styles.placeOrderDisabled,
+          ]}
+          disabled={!hasPaymentMethod || !addressComplete || placingOrder}
+          onPress={placeOrder}
+        >
+          {placingOrder ? (
+            <View style={styles.placeOrderLoading}>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.placeOrderText}>Placing order...</Text>
+            </View>
+          ) : (
+            <Text style={styles.placeOrderText}>Place order</Text>
+          )}
+        </Pressable>
 
         {!addressComplete && (
-          <Text
-            style={styles.addressRequiredNote}
-          >
-            Please complete your
-            shipping address before
-            placing the order.
+          <Text style={styles.addressRequiredNote}>
+            Please complete your shipping address before placing the order.
           </Text>
         )}
 
-        <Text
-          style={styles.secureNote}
-        >
-          Your order will be securely
-          processed through your selected
-          payment method.
+        <Text style={styles.secureNote}>
+          Your order will be securely processed through your selected payment
+          method.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -1551,8 +1128,7 @@ export default function CheckoutScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor:
-      STORE.colors.background,
+    backgroundColor: STORE.colors.background,
   },
 
   center: {
@@ -1560,8 +1136,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
-    backgroundColor:
-      STORE.colors.background,
+    backgroundColor: STORE.colors.background,
   },
 
   loadingText: {
@@ -1627,8 +1202,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 14,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   addressHint: {
@@ -1646,8 +1220,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     fontSize: 14,
     color: "#222",
-    backgroundColor:
-      "rgba(255,255,255,0.65)",
+    backgroundColor: "rgba(255,255,255,0.65)",
     marginBottom: 10,
   },
 
@@ -1686,14 +1259,12 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 14,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   paymentCardSelected: {
     borderColor: "#bd9650",
-    backgroundColor:
-      "rgba(255,255,255,0.7)",
+    backgroundColor: "rgba(255,255,255,0.7)",
   },
 
   paymentRadio: {
@@ -1749,8 +1320,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 14,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   shippingTitle: {
@@ -1780,8 +1350,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 14,
     padding: 14,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   summaryItem: {
@@ -1885,7 +1454,21 @@ const styles = StyleSheet.create({
   /* =======================================================
      Messages
      ======================================================= */
+catalogNote: {
+  marginTop: 20,
+  padding: 13,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "#ddd8cf",
+  backgroundColor: "rgba(255,255,255,0.45)",
+},
 
+catalogNoteText: {
+  fontSize: 12,
+  lineHeight: 18,
+  textAlign: "center",
+  color: "#777",
+},
   warningBox: {
     borderWidth: 1,
     borderColor: "#e3c7c4",
@@ -1904,8 +1487,7 @@ const styles = StyleSheet.create({
     borderColor: "#ddd8cf",
     borderRadius: 12,
     padding: 13,
-    backgroundColor:
-      "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(255,255,255,0.45)",
   },
 
   infoText: {
@@ -1949,11 +1531,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: "#888",
   },
-placeOrderLoading: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 10,
-},
+  placeOrderLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   /* =======================================================
      Empty
      ======================================================= */

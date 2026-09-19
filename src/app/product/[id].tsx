@@ -15,7 +15,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { STORE } from "@/constants/store";
 import { notifyCartChanged, supabase } from "@/lib/supabase";
 
-
 type DisplaySettings = {
   price?: boolean;
   size?: boolean;
@@ -66,7 +65,7 @@ export default function ProductDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  const [catalogMode, setCatalogMode] = useState(false);
   useEffect(() => {
     if (id) {
       loadProduct();
@@ -78,34 +77,51 @@ export default function ProductDetailScreen() {
       setLoading(true);
       setError(null);
 
-      const { data: productData, error: productError } = await supabase
-        .from("products")
-        .select(
-          `
-              id,
-              name,
-              description,
-              size,
-              price,
-              sale_price,
-              stock,
-              weight_grams,
-              height,
-              width,
-              depth,
-              images,
-              video_urls,
-              display_settings,
-              available_for_sale
-            `,
-        )
-        .eq("id", id)
-        .eq("active", true)
-        .maybeSingle();
+      const [
+        { data: productData, error: productError },
+        { data: siteSettings, error: siteSettingsError },
+      ] = await Promise.all([
+        supabase
+          .from("products")
+          .select(
+            `
+        id,
+        name,
+        description,
+        size,
+        price,
+        sale_price,
+        stock,
+        weight_grams,
+        height,
+        width,
+        depth,
+        images,
+        video_urls,
+        display_settings,
+        available_for_sale
+      `,
+          )
+          .eq("id", id)
+          .eq("active", true)
+          .maybeSingle(),
+
+        supabase
+          .from("site_settings")
+          .select("catalog_mode")
+          .eq("id", true)
+          .single(),
+      ]);
 
       if (productError) {
         throw productError;
       }
+
+      if (siteSettingsError) {
+        throw siteSettingsError;
+      }
+
+      setCatalogMode(siteSettings?.catalog_mode === true);
 
       if (!productData) {
         setError("Product not found.");
@@ -493,7 +509,7 @@ export default function ProductDetailScreen() {
                     router.push({
                       pathname: "/explore",
                       params: {
-                        category: category.id,
+                        category: category.slug,
                       },
                     })
                   }
@@ -516,7 +532,7 @@ export default function ProductDetailScreen() {
 
           {/* Price */}
 
-          {shown(settings, "price") && (
+          {!catalogMode && shown(settings, "price") && (
             <View style={styles.priceContainer}>
               {isOnSale ? (
                 <>

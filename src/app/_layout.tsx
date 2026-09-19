@@ -1,3 +1,4 @@
+import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import {
   DarkTheme,
@@ -12,6 +13,7 @@ import { useColorScheme } from "react-native";
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import SiteHeader from "@/components/SiteHeader";
+import { supabase } from "@/lib/supabase";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,31 +21,17 @@ SplashScreen.preventAutoHideAsync();
  * =========================================================
  * NOTIFICATION NAVIGATION
  * =========================================================
- *
- * Handles:
- *
- * 1. User taps a notification while the app is running.
- * 2. User taps a notification while the app is in background.
- * 3. User taps a notification that launches the app
- *    from a completely closed state.
- *
- * We keep all navigation inside the MOBILE APP.
  */
+
 function useNotificationObserver() {
   useEffect(() => {
     let mounted = true;
-
-    /*
-     * -------------------------------------------------------
-     * Navigate according to notification data
-     * -------------------------------------------------------
-     */
 
     const handleNotification = (notification: Notifications.Notification) => {
       if (!mounted) {
         return;
       }
-      //console.log("Handling notification:", notification);
+
       const data = notification.request.content.data as
         | {
             order_id?: unknown;
@@ -52,26 +40,15 @@ function useNotificationObserver() {
           }
         | undefined;
 
-      //console.log("Notification data:", data);
-
       /*
        * -----------------------------------------------------
        * ORDER NOTIFICATION
        * -----------------------------------------------------
-       *
-       * Example data:
-       *
-       * {
-       *   type: "order",
-       *   order_id: "..."
-       * }
        */
 
       if (typeof data?.order_id === "string" && data.order_id.length > 0) {
         const isAdminNotification =
           typeof data?.type === "string" && data.type.startsWith("admin_");
-
-        //console.log(          isAdminNotification            ? "Opening admin order:"           : "Opening mobile order:",          data.order_id,       );
 
         setTimeout(() => {
           if (!mounted) {
@@ -102,13 +79,9 @@ function useNotificationObserver() {
        * -----------------------------------------------------
        * PRODUCT NOTIFICATION
        * -----------------------------------------------------
-       *
-       * We can add product navigation later if needed.
        */
 
       if (typeof data?.product_id === "string" && data.product_id.length > 0) {
-       // console.log("Opening mobile product:", data.product_id);
-
         setTimeout(() => {
           if (!mounted) {
             return;
@@ -128,40 +101,27 @@ function useNotificationObserver() {
      * -------------------------------------------------------
      * APP ALREADY RUNNING / BACKGROUND
      * -------------------------------------------------------
-     *
-     * Fires when the user taps a notification.
      */
+
     const responseSubscription =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        //console.log("Notification tapped.");
-
         handleNotification(response.notification);
       });
 
     /*
      * -------------------------------------------------------
-     * APP WAS COMPLETELY CLOSED
+     * APP COMPLETELY CLOSED
      * -------------------------------------------------------
-     *
-     * If the notification launched the application,
-     * the response listener alone may not be enough.
-     *
-     * Therefore check the last notification response.
      */
+
     Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         if (!mounted || !response) {
           return;
         }
 
-        //console.log("App launched from notification.");
-
         handleNotification(response.notification);
 
-        /*
-         * Prevent the same notification response from
-         * being handled again.
-         */
         void Notifications.clearLastNotificationResponseAsync();
       })
       .catch((error) => {
@@ -183,6 +143,246 @@ function useNotificationObserver() {
 
 /*
  * =========================================================
+ * SUPABASE PASSWORD RESET DEEP LINK
+ * =========================================================
+ *
+ * Expected URL:
+ *
+ * mobileshop://auth/reset-password?code=XXXXXXXX
+ *
+ * The code must be exchanged for a Supabase session before
+ * ResetPasswordScreen calls getSession().
+ */
+
+function useSupabaseDeepLinkObserver() {
+  useEffect(() => {
+    let mounted = true;
+
+    async function handleUrl(url: string) {
+      try {
+        const cleanUrl = url.trim();
+
+        if (!cleanUrl) {
+          return;
+        }
+
+        const parsedUrl = new URL(cleanUrl);
+        const path =
+          (parsedUrl.pathname || "").replace(/^\/+/, "").replace(/\/+$/, "") ||
+          "";
+
+        const queryParams = Object.fromEntries(
+          parsedUrl.searchParams.entries(),
+        );
+
+        const hash = parsedUrl.hash.startsWith("#")
+          ? parsedUrl.hash.slice(1)
+          : parsedUrl.hash;
+
+        const hashParams = new URLSearchParams(hash);
+
+        const allParams = {
+          ...Object.fromEntries(hashParams.entries()),
+          ...queryParams,
+        };
+
+        const code = typeof allParams.code === "string" ? allParams.code : null;
+
+        const token =
+          typeof allParams.token === "string" ? allParams.token : null;
+
+        const type = typeof allParams.type === "string" ? allParams.type : null;
+
+        const email =
+          typeof allParams.email === "string" ? allParams.email : null;
+
+        const accessToken =
+          typeof allParams.access_token === "string"
+            ? allParams.access_token
+            : null;
+
+        const refreshToken =
+          typeof allParams.refresh_token === "string"
+            ? allParams.refresh_token
+            : null;
+
+        /*
+         * =====================================================
+         * PASSWORD RESET
+         * =====================================================
+         */
+
+        const isRecoveryLink =
+          path === "auth/reset-password" || type === "recovery";
+
+        if (isRecoveryLink) {
+          if (code) {
+            const { data, error } =
+              await supabase.auth.exchangeCodeForSession(code);
+
+            if (error) {
+              console.error("Password reset code exchange failed:", error);
+              return;
+            }
+
+            if (!mounted) {
+              return;
+            }
+
+            if (!data.session) {
+              console.error(
+                "Password reset exchange completed but no session was returned.",
+              );
+              return;
+            }
+
+            router.replace("/auth/reset-password");
+            return;
+          }
+
+          if (accessToken && refreshToken) {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (error) {
+              console.error("Password reset token session failed:", error);
+              return;
+            }
+
+            if (!mounted) {
+              return;
+            }
+
+            if (!data.session) {
+              console.error(
+                "Password reset token exchange completed but no session was returned.",
+              );
+              return;
+            }
+
+            router.replace("/auth/reset-password");
+            return;
+          }
+
+          if (token && type === "recovery") {
+            if (!email) {
+              console.error(
+                "Recovery token link is missing the email parameter.",
+              );
+              return;
+            }
+
+            const { data, error } = await supabase.auth.verifyOtp({
+              type: "recovery",
+              token,
+              email,
+            });
+
+            if (error) {
+              console.error("Password reset token verification failed:", error);
+              return;
+            }
+
+            if (!mounted) {
+              return;
+            }
+
+            if (!data.session) {
+              console.error(
+                "Recovery token verification completed but no session was returned.",
+              );
+              return;
+            }
+
+            router.replace("/auth/reset-password");
+            return;
+          }
+
+          console.error(
+            "Password reset deep link did not include a supported recovery payload.",
+          );
+          return;
+        }
+
+        /*
+         * =====================================================
+         * GOOGLE OAUTH
+         * =====================================================
+         *
+         * Google is handled directly by login.tsx because
+         * openAuthSessionAsync() returns the callback URL there.
+         *
+         * Therefore we deliberately do NOT process
+         * auth/callback here.
+         */
+
+        if (path === "auth/callback") {
+          console.log("OAuth callback received by RootLayout.");
+
+          return;
+        }
+
+        if (code || token || accessToken) {
+          console.log("Ignoring non-recovery deep link with auth parameters:", {
+            path,
+            type,
+            hasCode: !!code,
+            hasToken: !!token,
+            hasAccessToken: !!accessToken,
+          });
+
+          return;
+        }
+      } catch (error) {
+        console.error("Supabase deep link handling error:", error);
+      }
+    }
+
+    /*
+     * =====================================================
+     * APP ALREADY RUNNING
+     * =====================================================
+     */
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      void handleUrl(url);
+    });
+
+    /*
+     * =====================================================
+     * APP OPENED FROM CLOSED STATE
+     * =====================================================
+     */
+
+    Linking.getInitialURL()
+      .then((url) => {
+        if (!url) {
+          return;
+        }
+
+        void handleUrl(url);
+      })
+      .catch((error) => {
+        console.error("Unable to read initial deep link:", error);
+      });
+
+    /*
+     * =====================================================
+     * CLEANUP
+     * =====================================================
+     */
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+}
+
+/*
+ * =========================================================
  * ROOT LAYOUT
  * =========================================================
  */
@@ -191,6 +391,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useNotificationObserver();
+  useSupabaseDeepLinkObserver();
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -39,17 +38,14 @@ export default function ForgotPasswordScreen() {
     try {
       setLoading(true);
 
-      /*
-       * We deliberately do not tell the user whether the
-       * email exists or not.
-       *
-       * This prevents account enumeration.
-       */
-
       const { error: resetError } =
-        await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: "mobileshop://auth/reset-password",
-        });
+        await supabase.auth.resetPasswordForEmail(
+          cleanEmail,
+          {
+            redirectTo:
+              "mobileshop://auth/reset-password",
+          },
+        );
 
       if (resetError) {
         throw resetError;
@@ -59,7 +55,10 @@ export default function ForgotPasswordScreen() {
         "If an account exists for this email, we have sent a password reset link. Please check your inbox.",
       );
     } catch (err: any) {
-      console.error("Password reset error:", err);
+      console.error(
+        "Password reset error:",
+        err,
+      );
 
       setError(
         err?.message ||
@@ -74,17 +73,21 @@ export default function ForgotPasswordScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : "height"
+        }
+        keyboardVerticalOffset={
+          Platform.OS === "ios" ? 0 : 20
+        }
       >
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          {/* =================================================
-              BRAND
-              ================================================= */}
-
           <View style={styles.brandSection}>
             <Text style={styles.brandName}>
               {STORE.name}
@@ -93,44 +96,37 @@ export default function ForgotPasswordScreen() {
             <View style={styles.goldLine} />
           </View>
 
-          {/* =================================================
-              CARD
-              ================================================= */}
-
           <View style={styles.card}>
             <Text style={styles.title}>
               Forgot your password?
             </Text>
 
             <Text style={styles.subtitle}>
-              Enter your email address and we&apos;ll send you
+              Enter your email address and we'll send you
               a link to reset your password.
             </Text>
 
-            {/* =================================================
-                EMAIL
-                ================================================= */}
-
             <View style={styles.field}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>
+                Email
+              </Text>
 
               <TextInput
                 value={email}
                 onChangeText={setEmail}
                 placeholder="Enter your email"
-                placeholderTextColor={STORE.colors.mutedText}
+                placeholderTextColor={
+                  STORE.colors.mutedText
+                }
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
                 textContentType="emailAddress"
+                returnKeyType="done"
                 style={styles.input}
                 editable={!loading}
               />
             </View>
-
-            {/* =================================================
-                ERROR
-                ================================================= */}
 
             {error ? (
               <View style={styles.messageBox}>
@@ -140,10 +136,6 @@ export default function ForgotPasswordScreen() {
               </View>
             ) : null}
 
-            {/* =================================================
-                SUCCESS
-                ================================================= */}
-
             {success ? (
               <View style={styles.messageBox}>
                 <Text style={styles.successText}>
@@ -152,17 +144,15 @@ export default function ForgotPasswordScreen() {
               </View>
             ) : null}
 
-            {/* =================================================
-                SEND RESET LINK
-                ================================================= */}
-
             <Pressable
               onPress={handleForgotPassword}
               disabled={loading}
               style={({ pressed }) => [
                 styles.resetButton,
-                pressed && styles.buttonPressed,
-                loading && styles.buttonDisabled,
+                pressed &&
+                  styles.buttonPressed,
+                loading &&
+                  styles.buttonDisabled,
               ]}
             >
               {loading ? (
@@ -170,15 +160,15 @@ export default function ForgotPasswordScreen() {
                   color={STORE.colors.surface}
                 />
               ) : (
-                <Text style={styles.resetButtonText}>
+                <Text
+                  style={
+                    styles.resetButtonText
+                  }
+                >
                   Send reset link
                 </Text>
               )}
             </Pressable>
-
-            {/* =================================================
-                BACK TO SIGN IN
-                ================================================= */}
 
             <View style={styles.loginRow}>
               <Text style={styles.loginText}>
@@ -203,10 +193,6 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-/* =========================================================
-   STYLES
-   ========================================================= */
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -223,10 +209,6 @@ const styles = StyleSheet.create({
     paddingVertical: 35,
     justifyContent: "center",
   },
-
-  /* =======================================================
-     BRAND
-     ======================================================= */
 
   brandSection: {
     alignItems: "center",
@@ -247,10 +229,6 @@ const styles = StyleSheet.create({
     backgroundColor: STORE.colors.primary,
     marginTop: 10,
   },
-
-  /* =======================================================
-     CARD
-     ======================================================= */
 
   card: {
     backgroundColor: STORE.colors.surface,
@@ -274,10 +252,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
-  /* =======================================================
-     FIELD
-     ======================================================= */
-
   field: {
     marginBottom: 18,
   },
@@ -300,10 +274,6 @@ const styles = StyleSheet.create({
     color: STORE.colors.text,
   },
 
-  /* =======================================================
-     MESSAGES
-     ======================================================= */
-
   messageBox: {
     marginBottom: 16,
   },
@@ -319,10 +289,6 @@ const styles = StyleSheet.create({
     color: "#287A3E",
     lineHeight: 20,
   },
-
-  /* =======================================================
-     BUTTON
-     ======================================================= */
 
   resetButton: {
     height: 50,
@@ -346,10 +312,6 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-
-  /* =======================================================
-     LOGIN
-     ======================================================= */
 
   loginRow: {
     flexDirection: "row",

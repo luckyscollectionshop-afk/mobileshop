@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { STORE } from "@/constants/store";
 import { registerForPushNotifications } from "@/lib/notifications";
-import { cartEvents, supabase } from "@/lib/supabase";
+import { cartEvents, notificationEvents, supabase } from "@/lib/supabase";
 
 export default function SiteHeader() {
   const router = useRouter();
@@ -65,10 +65,7 @@ export default function SiteHeader() {
       if (!mounted) return;
 
       if (profileError) {
-        console.log(
-          "Unable to load profile role:",
-          profileError.message,
-        );
+        console.log("Unable to load profile role:", profileError.message);
 
         setIsAdmin(false);
       } else {
@@ -102,57 +99,52 @@ export default function SiteHeader() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!mounted) return;
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
 
-        if (!session?.user) {
-          setIsLoggedIn(false);
-          setIsAdmin(false);
-          setUserId(null);
-          setUnreadCount(0);
-          setCartCount(0);
-          return;
-        }
+      if (!session?.user) {
+        setIsLoggedIn(false);
+        setIsAdmin(false);
+        setUserId(null);
+        setUnreadCount(0);
+        setCartCount(0);
+        return;
+      }
 
-        const user = session.user;
+      const user = session.user;
 
-        setIsLoggedIn(true);
-        setUserId(user.id);
+      setIsLoggedIn(true);
+      setUserId(user.id);
 
-        registerForPushNotifications();
+      registerForPushNotifications();
 
-        /*
-         * Load role
-         */
+      /*
+       * Load role
+       */
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
 
-        if (!mounted) return;
+      if (!mounted) return;
 
-        if (profileError) {
-          console.log(
-            "Unable to load profile role:",
-            profileError.message,
-          );
+      if (profileError) {
+        console.log("Unable to load profile role:", profileError.message);
 
-          setIsAdmin(false);
-        } else {
-          setIsAdmin(profile?.role === "admin");
-        }
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(profile?.role === "admin");
+      }
 
-        /*
-         * Load counts
-         */
+      /*
+       * Load counts
+       */
 
-        await loadUnreadNotifications(user.id);
-        await loadCartCount(user.id);
-      },
-    );
+      await loadUnreadNotifications(user.id);
+      await loadCartCount(user.id);
+    });
 
     return () => {
       mounted = false;
@@ -180,37 +172,39 @@ export default function SiteHeader() {
     async function setupRealtime() {
       const existingChannel = supabase
         .getChannels()
-        .find(
-          (channel) =>
-            channel.topic === `realtime:${channelName}`,
-        );
+        .find((channel) => channel.topic === `realtime:${channelName}`);
 
       if (existingChannel) {
-        await supabase.removeChannel(existingChannel);
+        activeChannel = existingChannel;
+        return;
       }
 
       if (cancelled) {
         return;
       }
 
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${currentUserId}`,
-          },
-          () => {
-            void loadUnreadNotifications(currentUserId);
-          },
-        );
+      const channel = supabase.channel(channelName);
 
-      if (!cancelled) {
-        activeChannel = channel;
-        channel.subscribe();
+      channel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        () => {
+          void loadUnreadNotifications(currentUserId);
+        },
+      );
+
+      activeChannel = channel;
+
+      await channel.subscribe();
+
+      if (cancelled) {
+        await supabase.removeChannel(channel);
+        return;
       }
     }
 
@@ -246,15 +240,33 @@ export default function SiteHeader() {
       void loadCartCount(currentUserId);
     };
 
-    cartEvents.addEventListener(
-      "cartChanged",
-      handleCartChanged,
+    cartEvents.addEventListener("cartChanged", handleCartChanged);
+
+    return () => {
+      cartEvents.removeEventListener("cartChanged", handleCartChanged);
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    const currentUserId = userId;
+
+    const handleNotificationsChanged = () => {
+      void loadUnreadNotifications(currentUserId);
+    };
+
+    notificationEvents.addEventListener(
+      "notificationsChanged",
+      handleNotificationsChanged,
     );
 
     return () => {
-      cartEvents.removeEventListener(
-        "cartChanged",
-        handleCartChanged,
+      notificationEvents.removeEventListener(
+        "notificationsChanged",
+        handleNotificationsChanged,
       );
     };
   }, [userId]);
@@ -277,8 +289,7 @@ export default function SiteHeader() {
     const channelName = `header-cart-${currentUserId}`;
 
     let cancelled = false;
-    let activeChannel: ReturnType<typeof supabase.channel> | null =
-      null;
+    let activeChannel: ReturnType<typeof supabase.channel> | null = null;
 
     async function setupCartRealtime() {
       /*
@@ -296,18 +307,16 @@ export default function SiteHeader() {
       }
 
       /*
-       * Remove old channel if one exists
+       * Reuse an existing user channel instead of re-registering callbacks.
        */
 
       const existingChannel = supabase
         .getChannels()
-        .find(
-          (channel) =>
-            channel.topic === `realtime:${channelName}`,
-        );
+        .find((channel) => channel.topic === `realtime:${channelName}`);
 
       if (existingChannel) {
-        await supabase.removeChannel(existingChannel);
+        activeChannel = existingChannel;
+        return;
       }
 
       if (cancelled) {
@@ -318,24 +327,28 @@ export default function SiteHeader() {
        * Listen for cart item changes
        */
 
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "cart_items",
-            filter: `cart_id=eq.${cart.id}`,
-          },
-          () => {
-            void loadCartCount(currentUserId);
-          },
-        );
+      const channel = supabase.channel(channelName);
 
-      if (!cancelled) {
-        activeChannel = channel;
-        channel.subscribe();
+      channel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "cart_items",
+          filter: `cart_id=eq.${cart.id}`,
+        },
+        () => {
+          void loadCartCount(currentUserId);
+        },
+      );
+
+      activeChannel = channel;
+
+      await channel.subscribe();
+
+      if (cancelled) {
+        await supabase.removeChannel(channel);
+        return;
       }
     }
 
@@ -357,9 +370,7 @@ export default function SiteHeader() {
    * =========================================================
    */
 
-  async function loadUnreadNotifications(
-    currentUserId: string,
-  ) {
+  async function loadUnreadNotifications(currentUserId: string) {
     const { count, error } = await supabase
       .from("notifications")
       .select("id", {
@@ -370,10 +381,7 @@ export default function SiteHeader() {
       .is("read_at", null);
 
     if (error) {
-      console.log(
-        "Unable to load notification count:",
-        error.message,
-      );
+      console.log("Unable to load notification count:", error.message);
 
       setUnreadCount(0);
       return;
@@ -400,10 +408,7 @@ export default function SiteHeader() {
       .maybeSingle();
 
     if (cartError) {
-      console.log(
-        "Unable to load cart:",
-        cartError.message,
-      );
+      console.log("Unable to load cart:", cartError.message);
 
       setCartCount(0);
       return;
@@ -418,17 +423,13 @@ export default function SiteHeader() {
      * Get all cart items
      */
 
-    const { data: cartItems, error: itemsError } =
-      await supabase
-        .from("cart_items")
-        .select("quantity")
-        .eq("cart_id", cart.id);
+    const { data: cartItems, error: itemsError } = await supabase
+      .from("cart_items")
+      .select("quantity")
+      .eq("cart_id", cart.id);
 
     if (itemsError) {
-      console.log(
-        "Unable to load cart count:",
-        itemsError.message,
-      );
+      console.log("Unable to load cart count:", itemsError.message);
 
       setCartCount(0);
       return;
@@ -439,8 +440,7 @@ export default function SiteHeader() {
      */
 
     const totalQuantity = (cartItems ?? []).reduce(
-      (total, item) =>
-        total + (item.quantity ?? 0),
+      (total, item) => total + (item.quantity ?? 0),
       0,
     );
 
@@ -493,20 +493,13 @@ export default function SiteHeader() {
    */
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={styles.safeArea}
-    >
+    <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <View style={styles.header}>
-
         {/* ================================================= */}
         {/* LOGO */}
         {/* ================================================= */}
 
-        <Pressable
-          onPress={() => goTo("/")}
-          style={styles.logoContainer}
-        >
+        <Pressable onPress={() => goTo("/")} style={styles.logoContainer}>
           <Image
             source={require("@/assets/images/lcc.svg")}
             style={styles.logo}
@@ -519,7 +512,6 @@ export default function SiteHeader() {
         {/* ================================================= */}
 
         <View style={styles.rightSection}>
-
           {/* =================================================
               NOTIFICATION BELL
              ================================================= */}
@@ -535,68 +527,50 @@ export default function SiteHeader() {
                 <Text style={styles.bell}>🔔</Text>
 
                 {unreadCount > 0 && (
-                  <View
-                    style={styles.notificationBadge}
-                  >
-                    <Text
-                      style={styles.notificationBadgeText}
-                    >
-                      {unreadCount > 99
-                        ? "99+"
-                        : unreadCount}
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
                     </Text>
                   </View>
                 )}
               </View>
             </Pressable>
           )}
-{/* =================================================
+          {/* =================================================
     CART
    ================================================= */}
 
-{userId && (
-  <Pressable
-    onPress={() => {
-      router.push("/cart");
-    }}
-    style={styles.iconButton}
-  >
-    <View style={styles.cartContainer}>
-      <Text style={styles.cart}>🛒</Text>
+          {userId && (
+            <Pressable
+              onPress={() => {
+                router.push("/cart");
+              }}
+              style={styles.iconButton}
+            >
+              <View style={styles.cartContainer}>
+                <Text style={styles.cart}>🛒</Text>
 
-      {cartCount > 0 && (
-        <View style={styles.cartBadge}>
-          <Text style={styles.cartBadgeText}>
-            {cartCount > 99 ? "99+" : cartCount}
-          </Text>
-        </View>
-      )}
-    </View>
-  </Pressable>
-)}
+                {cartCount > 0 && (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>
+                      {cartCount > 99 ? "99+" : cartCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          )}
           {/* =================================================
               MENU
              ================================================= */}
 
           <Pressable
-            onPress={() =>
-              setMenuOpen((previous) => !previous)
-            }
-            style={[
-              styles.menuButton,
-              menuOpen && styles.menuButtonOpen,
-            ]}
+            onPress={() => setMenuOpen((previous) => !previous)}
+            style={[styles.menuButton, menuOpen && styles.menuButtonOpen]}
           >
-            <Text style={styles.menuText}>
-              Menu
-            </Text>
+            <Text style={styles.menuText}>Menu</Text>
 
-            <Text
-              style={[
-                styles.chevron,
-                menuOpen && styles.chevronOpen,
-              ]}
-            >
+            <Text style={[styles.chevron, menuOpen && styles.chevronOpen]}>
               ⌄
             </Text>
           </Pressable>
@@ -614,23 +588,16 @@ export default function SiteHeader() {
             onRequestClose={closeMenu}
           >
             <View style={styles.modalOverlay}>
-
-              <Pressable
-                style={styles.backdrop}
-                onPress={closeMenu}
-              />
+              <Pressable style={styles.backdrop} onPress={closeMenu} />
 
               <View style={styles.dropdown}>
-
                 {/* HOME */}
 
                 <Pressable
                   onPress={() => goTo("/")}
                   style={styles.dropdownItem}
                 >
-                  <Text style={styles.dropdownText}>
-                    Home
-                  </Text>
+                  <Text style={styles.dropdownText}>Home</Text>
                 </Pressable>
 
                 {/* PRODUCTS */}
@@ -639,9 +606,7 @@ export default function SiteHeader() {
                   onPress={() => goTo("/explore")}
                   style={styles.dropdownItem}
                 >
-                  <Text style={styles.dropdownText}>
-                    Products
-                  </Text>
+                  <Text style={styles.dropdownText}>Products</Text>
                 </Pressable>
 
                 {/* =================================================
@@ -650,17 +615,13 @@ export default function SiteHeader() {
 
                 {isLoggedIn ? (
                   <>
-                    
-
                     {/* ORDERS */}
 
                     <Pressable
                       onPress={() => goTo("/orders")}
                       style={styles.dropdownItem}
                     >
-                      <Text style={styles.dropdownText}>
-                        Orders
-                      </Text>
+                      <Text style={styles.dropdownText}>Orders</Text>
                     </Pressable>
 
                     {/* ADMIN */}
@@ -670,12 +631,7 @@ export default function SiteHeader() {
                         onPress={() => goTo("/admin")}
                         style={styles.dropdownItem}
                       >
-                        <Text
-                          style={[
-                            styles.dropdownText,
-                            styles.adminText,
-                          ]}
-                        >
+                        <Text style={[styles.dropdownText, styles.adminText]}>
                           Admin
                         </Text>
                       </Pressable>
@@ -689,12 +645,7 @@ export default function SiteHeader() {
                       onPress={handleSignOut}
                       style={styles.dropdownItem}
                     >
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          styles.signOutText,
-                        ]}
-                      >
+                      <Text style={[styles.dropdownText, styles.signOutText]}>
                         Sign out
                       </Text>
                     </Pressable>
@@ -707,9 +658,7 @@ export default function SiteHeader() {
                       onPress={() => goTo("/auth/login")}
                       style={styles.dropdownItem}
                     >
-                      <Text style={styles.dropdownText}>
-                        Sign in
-                      </Text>
+                      <Text style={styles.dropdownText}>Sign in</Text>
                     </Pressable>
 
                     {/* CREATE ACCOUNT */}
@@ -719,10 +668,7 @@ export default function SiteHeader() {
                       style={styles.dropdownItem}
                     >
                       <Text
-                        style={[
-                          styles.dropdownText,
-                          styles.createAccountText,
-                        ]}
+                        style={[styles.dropdownText, styles.createAccountText]}
                       >
                         Create account
                       </Text>
@@ -820,39 +766,39 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
   },
-cartContainer: {
-  width: 30,
-  height: 30,
-  alignItems: "center",
-  justifyContent: "center",
-  position: "relative",
-},
+  cartContainer: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
 
-cart: {
-  fontSize: 20,
-},
+  cart: {
+    fontSize: 20,
+  },
 
-cartBadge: {
-  position: "absolute",
-  top: -4,
-  right: -7,
-  minWidth: 17,
-  height: 17,
-  paddingHorizontal: 4,
-  borderRadius: 9,
-  backgroundColor: "#b3261e",
-  alignItems: "center",
-  justifyContent: "center",
-  borderWidth: 1,
-  borderColor: STORE.colors.background,
-},
+  cartBadge: {
+    position: "absolute",
+    top: -4,
+    right: -7,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: "#b3261e",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: STORE.colors.background,
+  },
 
-cartBadgeText: {
-  color: "#fff",
-  fontSize: 9,
-  fontWeight: "700",
-  textAlign: "center",
-},
+  cartBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   menuButton: {
     height: 32,
     minWidth: 104,

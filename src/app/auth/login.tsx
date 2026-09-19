@@ -105,8 +105,6 @@ async function handleGoogleLogin() {
   try {
     setGoogleLoading(true);
 
-    //console.log("OAuth redirect URL:", redirectTo);
-
     const { data, error: oauthError } =
       await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -115,8 +113,10 @@ async function handleGoogleLogin() {
           skipBrowserRedirect: true,
         },
       });
-console.log("ACTUAL REDIRECT TO:", redirectTo);
-console.log("SUPABASE OAUTH URL:", data?.url);
+
+    console.log("ACTUAL REDIRECT TO:", redirectTo);
+    console.log("SUPABASE OAUTH URL:", data?.url);
+
     if (oauthError) {
       throw oauthError;
     }
@@ -125,15 +125,13 @@ console.log("SUPABASE OAUTH URL:", data?.url);
       throw new Error("Unable to start Google sign in.");
     }
 
-    /*
-     * Open Google authentication.
-     */
-    const result = await WebBrowser.openAuthSessionAsync(
-      data.url,
-      redirectTo,
-    );
+    const result =
+      await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectTo,
+      );
 
-    //console.log("OAuth browser result:", result);
+    console.log("OAuth browser result:", result);
 
     if (result.type !== "success" || !result.url) {
       if (result.type === "cancel") {
@@ -143,89 +141,61 @@ console.log("SUPABASE OAUTH URL:", data?.url);
       return;
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * The current Supabase response is:
-     *
-     * mobileshop://auth/callback#access_token=...
-     *                         ^
-     *                         tokens are in the URL fragment
-     *
-     * Expo Router's useLocalSearchParams() does not reliably
-     * expose fragment parameters, so we read the URL directly.
-     */
-
     const callbackUrl = result.url;
 
-    //console.log("OAuth callback URL received:", callbackUrl);
-
-    const hashIndex = callbackUrl.indexOf("#");
-
-    if (hashIndex === -1) {
-      throw new Error(
-        "Google sign in returned no authentication data.",
-      );
-    }
-
-    const hash = callbackUrl.substring(hashIndex + 1);
-
-    const fragmentParams = new URLSearchParams(hash);
-
-    const accessToken =
-      fragmentParams.get("access_token");
-
-    const refreshToken =
-      fragmentParams.get("refresh_token");
-
-    if (!accessToken || !refreshToken) {
-      throw new Error(
-        "Google sign in returned incomplete authentication data.",
-      );
-    }
-
-   // console.log(      "OAuth tokens received successfully.",    );
+    console.log(
+      "Google OAuth callback URL:",
+      callbackUrl,
+    );
 
     /*
-     * Create the Supabase session.
+     * -------------------------------------------------------
+     * PKCE CALLBACK
+     * -------------------------------------------------------
+     *
+     * Current callback:
+     *
+     * mobileshop://auth/callback?code=XXXXXXXX
+     *
+     * We must exchange this code for the Supabase session.
      */
-    const { error: sessionError } =
-      await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
+
+    const parsedUrl = new URL(callbackUrl);
+
+    const code = parsedUrl.searchParams.get("code");
+
+    if (!code) {
+      throw new Error(
+        "Google sign in returned no authentication code.",
+      );
+    }
+
+    console.log(
+      "Google OAuth code received. Exchanging for session...",
+    );
+
+    const {
+      data: sessionData,
+      error: sessionError,
+    } =
+      await supabase.auth.exchangeCodeForSession(code);
 
     if (sessionError) {
       throw sessionError;
     }
 
-    /*
-     * Verify that the session really exists.
-     */
-    const {
-      data: sessionData,
-      error: getSessionError,
-    } = await supabase.auth.getSession();
-
-    if (getSessionError) {
-      throw getSessionError;
-    }
-
     if (!sessionData.session) {
       throw new Error(
-        "Google sign in completed, but the session could not be created.",
+        "Google sign in completed, but no session was created.",
       );
     }
 
-    // console.log(
-    //   "Google login successful.",
-    // );
+    console.log(
+      "Google session established successfully.",
+    );
 
     setSuccess("Login successful.");
 
-    /*
-     * Go directly to the home page.
-     */
     setTimeout(() => {
       router.replace("/");
     }, 400);
@@ -248,7 +218,6 @@ console.log("SUPABASE OAUTH URL:", data?.url);
     setGoogleLoading(false);
   }
 }
-
 
 
   return (

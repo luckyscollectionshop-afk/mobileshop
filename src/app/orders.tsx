@@ -31,6 +31,7 @@ export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [catalogMode, setCatalogMode] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,6 +57,18 @@ export default function OrdersScreen() {
         router.replace("/auth/login");
         return;
       }
+
+      const { data: siteSettings, error: siteSettingsError } = await supabase
+        .from("site_settings")
+        .select("catalog_mode")
+        .eq("id", true)
+        .maybeSingle();
+
+      if (siteSettingsError) {
+        throw siteSettingsError;
+      }
+
+      setCatalogMode(siteSettings?.catalog_mode === true);
 
       const { data, error: ordersError } = await supabase
         .from("orders")
@@ -208,9 +221,15 @@ export default function OrdersScreen() {
 
               <View style={styles.orderBottom}>
                 <View>
-                  <Text style={styles.totalLabel}>Total</Text>
+                   {!catalogMode && (
+      <>
+        <Text style={styles.totalLabel}>Total</Text>
 
-                  <Text style={styles.total}>CHF {order.total.toFixed(2)}</Text>
+        <Text style={styles.total}>
+          CHF {order.total.toFixed(2)}
+        </Text>
+      </>
+    )}
                 </View>
 
                 <Pressable

@@ -1,20 +1,21 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
 import { createClient } from "@supabase/supabase-js";
+import { Platform } from "react-native";
+import "react-native-url-polyfill/auto";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabasePublishableKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
 // ---------------------------------------------------------
-// Storage
+// STORAGE
+// ---------------------------------------------------------
 //
-// Android/iOS:
-//   Use AsyncStorage.
+// Android / iOS:
+//   AsyncStorage
 //
-// Web/server:
-//   Never access window/localStorage unless it actually exists.
-//   Expo Router can evaluate this file on the server.
+// Web / server:
+//   localStorage only when window actually exists.
 // ---------------------------------------------------------
 
 const webStorage = {
@@ -43,26 +44,43 @@ const webStorage = {
   },
 };
 
-const storage =
-  Platform.OS === "web"
-    ? webStorage
-    : AsyncStorage;
+const storage = Platform.OS === "web" ? webStorage : AsyncStorage;
 
-export const supabase = createClient(
-  supabaseUrl,
-  supabasePublishableKey,
-  {
-    auth: {
-      storage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
+// ---------------------------------------------------------
+// SUPABASE
+// ---------------------------------------------------------
+
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+  auth: {
+    storage,
+
+    autoRefreshToken: true,
+    persistSession: true,
+
+    // Mobile apps receive the recovery URL themselves.
+    detectSessionInUrl: false,
+
+    // Important for native password-reset deep links.
+    flowType: "pkce",
   },
-);
+});
+
+// ---------------------------------------------------------
+// CART EVENTS
+// ---------------------------------------------------------
 
 export const cartEvents = new EventTarget();
 
 export function notifyCartChanged() {
   cartEvents.dispatchEvent(new Event("cartChanged"));
+}
+
+// ---------------------------------------------------------
+// NOTIFICATION EVENTS
+// ---------------------------------------------------------
+
+export const notificationEvents = new EventTarget();
+
+export function notifyNotificationsChanged() {
+  notificationEvents.dispatchEvent(new Event("notificationsChanged"));
 }

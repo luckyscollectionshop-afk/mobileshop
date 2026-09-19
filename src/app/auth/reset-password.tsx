@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,70 +19,151 @@ import { STORE } from "@/constants/store";
 export default function ResetPasswordScreen() {
   const router = useRouter();
 
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [newPassword, setNewPassword] =
+    useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
 
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [loading, setLoading] =
+    useState(false);
 
-  /* =========================================================
-     CHECK RESET SESSION
-     ========================================================= */
+  const [checkingSession, setCheckingSession] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  /*
+   * =========================================================
+   * CHECK RESET SESSION
+   * =========================================================
+   */
 
   useEffect(() => {
+    let mounted = true;
+
     async function checkSession() {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        /*
+         * The RootLayout handles the incoming deep-link
+         * code and calls exchangeCodeForSession().
+         *
+         * We give that process a short amount of time to
+         * establish the recovery session.
+         */
 
-        if (!session) {
+        for (let attempt = 0; attempt < 20; attempt++) {
+          if (!mounted) {
+            return;
+          }
+
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          if (session) {
+            if (mounted) {
+              setError("");
+              setCheckingSession(false);
+            }
+
+            return;
+          }
+
+          /*
+           * Wait 250 ms before checking again.
+           *
+           * This avoids a race between Expo opening the
+           * screen and RootLayout processing the deep link.
+           */
+
+          await new Promise((resolve) =>
+            setTimeout(resolve, 250),
+          );
+        }
+
+        if (mounted) {
           setError(
             "This password reset link is invalid or has expired. Please request a new one.",
           );
         }
       } catch (err) {
-        console.error("Reset session error:", err);
-
-        setError(
-          "Unable to verify the password reset link. Please request a new one.",
+        console.error(
+          "Reset session error:",
+          err,
         );
+
+        if (mounted) {
+          setError(
+            "Unable to verify the password reset link. Please request a new one.",
+          );
+        }
       } finally {
-        setCheckingSession(false);
+        if (mounted) {
+          setCheckingSession(false);
+        }
       }
     }
 
-    checkSession();
+    void checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  /* =========================================================
-     UPDATE PASSWORD
-     ========================================================= */
+  /*
+   * =========================================================
+   * UPDATE PASSWORD
+   * =========================================================
+   */
 
   async function handleUpdatePassword() {
     setError("");
     setSuccess("");
 
     if (!newPassword || !confirmPassword) {
-      setError("Please fill in both password fields.");
+      setError(
+        "Please fill in both password fields.",
+      );
       return;
     }
 
     if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError(
+        "Password must be at least 6 characters.",
+      );
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(
+        "Passwords do not match.",
+      );
       return;
     }
 
     try {
       setLoading(true);
+
+      /*
+       * Confirm that the recovery session still exists.
+       */
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        setError(
+          "Your password reset session has expired. Please request a new reset link.",
+        );
+        return;
+      }
 
       const { error: updateError } =
         await supabase.auth.updateUser({
@@ -98,16 +178,16 @@ export default function ResetPasswordScreen() {
         "Your password has been updated successfully.",
       );
 
-      /*
-       * Give the user a moment to see the success message,
-       * then return to Sign in.
-       */
       setTimeout(async () => {
         await supabase.auth.signOut();
+
         router.replace("/auth/login");
       }, 1200);
     } catch (err: any) {
-      console.error("Update password error:", err);
+      console.error(
+        "Update password error:",
+        err,
+      );
 
       setError(
         err?.message ||
@@ -118,9 +198,11 @@ export default function ResetPasswordScreen() {
     }
   }
 
-  /* =========================================================
-     CHECKING RESET SESSION
-     ========================================================= */
+  /*
+   * =========================================================
+   * CHECKING SESSION
+   * =========================================================
+   */
 
   if (checkingSession) {
     return (
@@ -137,25 +219,31 @@ export default function ResetPasswordScreen() {
     );
   }
 
-  /* =========================================================
-     SCREEN
-     ========================================================= */
+  /*
+   * =========================================================
+   * SCREEN
+   * =========================================================
+   */
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : "height"
+        }
+        keyboardVerticalOffset={
+          Platform.OS === "ios" ? 0 : 20
+        }
       >
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          {/* =================================================
-              BRAND
-              ================================================= */}
-
           <View style={styles.brandSection}>
             <Text style={styles.brandName}>
               {STORE.name}
@@ -163,10 +251,6 @@ export default function ResetPasswordScreen() {
 
             <View style={styles.goldLine} />
           </View>
-
-          {/* =================================================
-              CARD
-              ================================================= */}
 
           <View style={styles.card}>
             <Text style={styles.title}>
@@ -177,10 +261,6 @@ export default function ResetPasswordScreen() {
               Create a new password for your account.
             </Text>
 
-            {/* =================================================
-                NEW PASSWORD
-                ================================================= */}
-
             <View style={styles.field}>
               <Text style={styles.label}>
                 New password
@@ -190,19 +270,18 @@ export default function ResetPasswordScreen() {
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Enter your new password"
-                placeholderTextColor={STORE.colors.mutedText}
+                placeholderTextColor={
+                  STORE.colors.mutedText
+                }
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
                 textContentType="newPassword"
+                returnKeyType="next"
                 style={styles.input}
                 editable={!loading && !success}
               />
             </View>
-
-            {/* =================================================
-                CONFIRM PASSWORD
-                ================================================= */}
 
             <View style={styles.field}>
               <Text style={styles.label}>
@@ -213,19 +292,18 @@ export default function ResetPasswordScreen() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Enter your password again"
-                placeholderTextColor={STORE.colors.mutedText}
+                placeholderTextColor={
+                  STORE.colors.mutedText
+                }
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
                 textContentType="newPassword"
+                returnKeyType="done"
                 style={styles.input}
                 editable={!loading && !success}
               />
             </View>
-
-            {/* =================================================
-                ERROR
-                ================================================= */}
 
             {error ? (
               <View style={styles.messageBox}>
@@ -235,10 +313,6 @@ export default function ResetPasswordScreen() {
               </View>
             ) : null}
 
-            {/* =================================================
-                SUCCESS
-                ================================================= */}
-
             {success ? (
               <View style={styles.messageBox}>
                 <Text style={styles.successText}>
@@ -247,18 +321,15 @@ export default function ResetPasswordScreen() {
               </View>
             ) : null}
 
-            {/* =================================================
-                UPDATE PASSWORD
-                ================================================= */}
-
-            {!success ? (
+            {!success && !error ? (
               <Pressable
                 onPress={handleUpdatePassword}
-                disabled={loading || !!error}
+                disabled={loading}
                 style={({ pressed }) => [
                   styles.updateButton,
-                  pressed && styles.buttonPressed,
-                  (loading || !!error) &&
+                  pressed &&
+                    styles.buttonPressed,
+                  loading &&
                     styles.buttonDisabled,
                 ]}
               >
@@ -267,16 +338,16 @@ export default function ResetPasswordScreen() {
                     color={STORE.colors.surface}
                   />
                 ) : (
-                  <Text style={styles.updateButtonText}>
+                  <Text
+                    style={
+                      styles.updateButtonText
+                    }
+                  >
                     Update password
                   </Text>
                 )}
               </Pressable>
             ) : null}
-
-            {/* =================================================
-                BACK TO SIGN IN
-                ================================================= */}
 
             <View style={styles.loginRow}>
               <Text style={styles.loginText}>
@@ -301,9 +372,11 @@ export default function ResetPasswordScreen() {
   );
 }
 
-/* =========================================================
-   STYLES
-   ========================================================= */
+/*
+ * =========================================================
+ * STYLES
+ * =========================================================
+ */
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -334,10 +407,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* =======================================================
-     BRAND
-     ======================================================= */
-
   brandSection: {
     alignItems: "center",
     marginBottom: 28,
@@ -357,10 +426,6 @@ const styles = StyleSheet.create({
     backgroundColor: STORE.colors.primary,
     marginTop: 10,
   },
-
-  /* =======================================================
-     CARD
-     ======================================================= */
 
   card: {
     backgroundColor: STORE.colors.surface,
@@ -384,10 +449,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
-  /* =======================================================
-     FIELDS
-     ======================================================= */
-
   field: {
     marginBottom: 18,
   },
@@ -410,10 +471,6 @@ const styles = StyleSheet.create({
     color: STORE.colors.text,
   },
 
-  /* =======================================================
-     MESSAGES
-     ======================================================= */
-
   messageBox: {
     marginBottom: 16,
   },
@@ -429,10 +486,6 @@ const styles = StyleSheet.create({
     color: "#287A3E",
     lineHeight: 20,
   },
-
-  /* =======================================================
-     BUTTON
-     ======================================================= */
 
   updateButton: {
     height: 50,
@@ -456,10 +509,6 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.6,
   },
-
-  /* =======================================================
-     LOGIN
-     ======================================================= */
 
   loginRow: {
     flexDirection: "row",
