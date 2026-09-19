@@ -1,11 +1,13 @@
+import { File } from "expo-file-system";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { File } from "expo-file-system";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -265,127 +267,117 @@ export default function ProductForm({
   }
 
   async function analyzeProductWithAI() {
-  if (!aiImageUri) {
-    Alert.alert(
-      "AI Product Analysis",
-      "Please choose a product image first. AI can analyze one image at a time.",
-    );
-    return;
-  }
-
-  setAiAnalyzing(true);
-
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
+    if (!aiImageUri) {
       Alert.alert(
-        "Sign in required",
-        "Your admin session has expired. Please sign in again.",
+        "AI Product Analysis",
+        "Please choose a product image first. AI can analyze one image at a time.",
       );
-
-      router.replace("/auth/login");
       return;
     }
 
-    console.log("AI image URI:", aiImageUri);
+    setAiAnalyzing(true);
 
-    const file = new File(aiImageUri);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    const base64 = await file.base64();
-
-    if (!base64) {
-      throw new Error("Could not read the selected image.");
-    }
-
-    const response = await fetch(
-      `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/admin/ai/analyze-product`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          imageBase64: base64,
-          mimeType: "image/jpeg",
-          fileName: "product-image.jpg",
-        }),
-      },
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error || "AI analysis failed.",
-      );
-    }
-
-    if (data.name) {
-      setName(data.name);
-    }
-
-    if (data.description) {
-      setDescription(data.description);
-    }
-
-    if (Array.isArray(data.keywords)) {
-      const aiKeywords = data.keywords
-        .filter(
-          (keyword: unknown): keyword is string =>
-            typeof keyword === "string",
-        )
-        .map((keyword: string) =>
-          keyword.trim().toLowerCase(),
-        )
-        .filter((keyword: string) => Boolean(keyword));
-
-      setKeywords(aiKeywords.join(", "));
-    }
-
-    if (data.size) {
-      setSize(data.size);
-    }
-
-    if (data.suggestedCategory) {
-      const suggested = availableCategories.find(
-        (category) =>
-          category.name.toLowerCase().trim() ===
-          data.suggestedCategory.toLowerCase().trim(),
-      );
-
-      if (suggested) {
-        setCategoryIds((current) =>
-          current.includes(suggested.id)
-            ? current
-            : [...current, suggested.id],
+      if (!session?.access_token) {
+        Alert.alert(
+          "Sign in required",
+          "Your admin session has expired. Please sign in again.",
         );
+
+        router.replace("/auth/login");
+        return;
       }
+
+      console.log("AI image URI:", aiImageUri);
+
+      const file = new File(aiImageUri);
+
+      const base64 = await file.base64();
+
+      if (!base64) {
+        throw new Error("Could not read the selected image.");
+      }
+
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_WEB_API_URL}/api/admin/ai/analyze-product`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mimeType: "image/jpeg",
+            fileName: "product-image.jpg",
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "AI analysis failed.");
+      }
+
+      if (data.name) {
+        setName(data.name);
+      }
+
+      if (data.description) {
+        setDescription(data.description);
+      }
+
+      if (Array.isArray(data.keywords)) {
+        const aiKeywords = data.keywords
+          .filter(
+            (keyword: unknown): keyword is string =>
+              typeof keyword === "string",
+          )
+          .map((keyword: string) => keyword.trim().toLowerCase())
+          .filter((keyword: string) => Boolean(keyword));
+
+        setKeywords(aiKeywords.join(", "));
+      }
+
+      if (data.size) {
+        setSize(data.size);
+      }
+
+      if (data.suggestedCategory) {
+        const suggested = availableCategories.find(
+          (category) =>
+            category.name.toLowerCase().trim() ===
+            data.suggestedCategory.toLowerCase().trim(),
+        );
+
+        if (suggested) {
+          setCategoryIds((current) =>
+            current.includes(suggested.id)
+              ? current
+              : [...current, suggested.id],
+          );
+        }
+      }
+
+      Alert.alert("AI complete", "Product details have been filled in.");
+    } catch (error) {
+      console.error("AI product analysis error:", error);
+
+      Alert.alert(
+        "AI analysis failed",
+        error instanceof Error
+          ? error.message
+          : "Could not analyze the product image.",
+      );
+    } finally {
+      setAiAnalyzing(false);
     }
-
-    Alert.alert(
-      "AI complete",
-      "Product details have been filled in.",
-    );
-  } catch (error) {
-    console.error(
-      "AI product analysis error:",
-      error,
-    );
-
-    Alert.alert(
-      "AI analysis failed",
-      error instanceof Error
-        ? error.message
-        : "Could not analyze the product image.",
-    );
-  } finally {
-    setAiAnalyzing(false);
   }
-}
   // -------------------------------------------------------
   // DELETE CLOUDINARY IMAGE
   // -------------------------------------------------------
@@ -850,418 +842,425 @@ export default function ProductForm({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* HEADER */}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* HEADER */}
 
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.replace("/admin/products")}
-            style={styles.backButton}
-          >
-            <Text style={styles.backText}>‹ Products</Text>
-          </Pressable>
-
-          <Text style={styles.title}>
-            {editing ? "Edit Product" : "Add Product"}
-          </Text>
-
-          <Text style={styles.subtitle}>
-            {editing
-              ? "Update product details."
-              : "Add a new product to your shop."}
-          </Text>
-        </View>
-
-        {/* BASIC INFORMATION */}
-
-        <Section title="Basic Information">
-          <Field
-            label="Product Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Pearl Jhumka Earrings"
-          />
-
-          <Field
-            label="Sticker"
-            value={sticker}
-            onChangeText={setSticker}
-            placeholder="NEW, BESTSELLER, LIMITED"
-          />
-
-          <Text style={styles.helper}>
-            Optional. Appears on the product card.
-          </Text>
-
-          <Field
-            label="Size"
-            value={size}
-            onChangeText={setSize}
-            placeholder="e.g. S, M, L or 20 × 30 cm"
-          />
-
-          <Field
-            label="Description"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Describe the product..."
-            multiline
-          />
-
-          <Field
-            label="Keywords"
-            value={keywords}
-            onChangeText={setKeywords}
-            placeholder="yellow, jhumka, jewellery, gift"
-          />
-
-          <Text style={styles.helper}>Separate keywords with commas.</Text>
-        </Section>
-
-        {/* IMAGES */}
-
-        <Section title="Product Images">
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={pickAndUploadImage}
-          >
-            <Text style={styles.secondaryButtonText}>+ Choose Images</Text>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.secondaryButton,
-              aiAnalyzing && styles.disabledButton,
-            ]}
-            onPress={analyzeProductWithAI}
-            disabled={aiAnalyzing || saving || deleting || images.length === 0}
-          >
-            {aiAnalyzing ? (
-              <View style={styles.aiButtonContent}>
-                <ActivityIndicator size="small" color="#6d5630" />
-                <Text style={styles.secondaryButtonText}>Analyzing...</Text>
-              </View>
-            ) : (
-              <Text style={styles.secondaryButtonText}>✨ Fill with AI</Text>
-            )}
-          </Pressable>
-
-          <Text style={styles.helper}>
-            Select a product image first. AI will suggest the product name,
-            description, keywords, size and category.
-          </Text>
-
-          {images.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.imagePreviewRow}
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => router.replace("/admin/products")}
+              style={styles.backButton}
             >
-              {images.map((url, index) => (
-                <View key={`${url}-${index}`} style={styles.imagePreviewCard}>
-                  <Image
-                    source={{ uri: url }}
-                    style={styles.productImage}
-                    contentFit="cover"
-                    transition={150}
-                  />
+              <Text style={styles.backText}>‹ Products</Text>
+            </Pressable>
 
-                  <View style={styles.imageNumberBadge}>
-                    <Text style={styles.imageNumberText}>{index + 1}</Text>
-                  </View>
+            <Text style={styles.title}>
+              {editing ? "Edit Product" : "Add Product"}
+            </Text>
 
-                  <Pressable
-                    onPress={() => removeImage(index)}
-                    style={styles.imageRemoveButton}
-                  >
-                    <Text style={styles.imageRemoveText}>Remove</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+            <Text style={styles.subtitle}>
+              {editing
+                ? "Update product details."
+                : "Add a new product to your shop."}
+            </Text>
+          </View>
 
-          <Text style={styles.helper}>
-            Select one or more images from your phone. Images are uploaded
-            securely to Cloudinary.
-          </Text>
-        </Section>
+          {/* BASIC INFORMATION */}
 
-        {/* CATEGORIES */}
-
-        <Section title="Categories">
-          <View style={styles.categoryCreateRow}>
-            <TextInput
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              placeholder="New category name"
-              placeholderTextColor="#aaa49a"
-              style={styles.categoryInput}
+          <Section title="Basic Information">
+            <Field
+              label="Product Name"
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Pearl Jhumka Earrings"
             />
 
+            <Field
+              label="Sticker"
+              value={sticker}
+              onChangeText={setSticker}
+              placeholder="NEW, BESTSELLER, LIMITED"
+            />
+
+            <Text style={styles.helper}>
+              Optional. Appears on the product card.
+            </Text>
+
+            <Field
+              label="Size"
+              value={size}
+              onChangeText={setSize}
+              placeholder="e.g. S, M, L or 20 × 30 cm"
+            />
+
+            <Field
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe the product..."
+              multiline
+            />
+
+            <Field
+              label="Keywords"
+              value={keywords}
+              onChangeText={setKeywords}
+              placeholder="yellow, jhumka, jewellery, gift"
+            />
+
+            <Text style={styles.helper}>Separate keywords with commas.</Text>
+          </Section>
+
+          {/* IMAGES */}
+
+          <Section title="Product Images">
             <Pressable
-              style={styles.smallButton}
-              onPress={createCategory}
-              disabled={creatingCategory || !newCategoryName.trim()}
+              style={styles.secondaryButton}
+              onPress={pickAndUploadImage}
             >
-              {creatingCategory ? (
-                <ActivityIndicator color="#ffffff" size="small" />
+              <Text style={styles.secondaryButtonText}>+ Choose Images</Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.secondaryButton,
+                aiAnalyzing && styles.disabledButton,
+              ]}
+              onPress={analyzeProductWithAI}
+              disabled={
+                aiAnalyzing || saving || deleting || images.length === 0
+              }
+            >
+              {aiAnalyzing ? (
+                <View style={styles.aiButtonContent}>
+                  <ActivityIndicator size="small" color="#6d5630" />
+                  <Text style={styles.secondaryButtonText}>Analyzing...</Text>
+                </View>
               ) : (
-                <Text style={styles.smallButtonText}>Add</Text>
+                <Text style={styles.secondaryButtonText}>✨ Fill with AI</Text>
               )}
             </Pressable>
-          </View>
 
-          {availableCategories.length > 0 ? (
-            <View style={styles.categoryScrollContainer}>
+            <Text style={styles.helper}>
+              Select a product image first. AI will suggest the product name,
+              description, keywords, size and category.
+            </Text>
+
+            {images.length > 0 && (
               <ScrollView
-                nestedScrollEnabled
-                showsVerticalScrollIndicator
-                contentContainerStyle={styles.categoryList}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.imagePreviewRow}
               >
-                {availableCategories.map((category) => {
-                  const selected = categoryIds.includes(category.id);
+                {images.map((url, index) => (
+                  <View key={`${url}-${index}`} style={styles.imagePreviewCard}>
+                    <Image
+                      source={{ uri: url }}
+                      style={styles.productImage}
+                      contentFit="cover"
+                      transition={150}
+                    />
 
-                  return (
+                    <View style={styles.imageNumberBadge}>
+                      <Text style={styles.imageNumberText}>{index + 1}</Text>
+                    </View>
+
                     <Pressable
-                      key={category.id}
-                      style={[
-                        styles.categoryItem,
-                        selected && styles.categoryItemSelected,
-                      ]}
-                      onPress={() => toggleCategory(category.id)}
+                      onPress={() => removeImage(index)}
+                      style={styles.imageRemoveButton}
                     >
-                      <View
-                        style={[
-                          styles.checkbox,
-                          selected && styles.checkboxSelected,
-                        ]}
-                      >
-                        {selected ? (
-                          <Text style={styles.checkmark}>✓</Text>
-                        ) : null}
-                      </View>
-
-                      <Text style={styles.categoryName}>{category.name}</Text>
+                      <Text style={styles.imageRemoveText}>Remove</Text>
                     </Pressable>
-                  );
-                })}
+                  </View>
+                ))}
               </ScrollView>
-            </View>
-          ) : (
-            <Text style={styles.helper}>No categories yet.</Text>
-          )}
-        </Section>
+            )}
 
-        {/* PRICING */}
+            <Text style={styles.helper}>
+              Select one or more images from your phone. Images are uploaded
+              securely to Cloudinary.
+            </Text>
+          </Section>
 
-        <Section title="Pricing & Inventory">
-          <Field
-            label="Price (CHF)"
-            value={price}
-            onChangeText={setPrice}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-          />
+          {/* CATEGORIES */}
 
-          <Field
-            label="Sale Price (CHF)"
-            value={salePrice}
-            onChangeText={setSalePrice}
-            placeholder="Optional"
-            keyboardType="decimal-pad"
-          />
+          <Section title="Categories">
+            <View style={styles.categoryCreateRow}>
+              <TextInput
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+                placeholder="New category name"
+                placeholderTextColor="#aaa49a"
+                style={styles.categoryInput}
+              />
 
-          <Field
-            label="Stock"
-            value={stock}
-            onChangeText={setStock}
-            placeholder="0"
-            keyboardType="number-pad"
-          />
-        </Section>
-
-        {/* DIMENSIONS */}
-
-        <Section title="Dimensions & Weight">
-          <Field
-            label="Height (cm)"
-            value={height}
-            onChangeText={setHeight}
-            placeholder="0"
-            keyboardType="decimal-pad"
-          />
-
-          <Field
-            label="Width (cm)"
-            value={width}
-            onChangeText={setWidth}
-            placeholder="0"
-            keyboardType="decimal-pad"
-          />
-
-          <Field
-            label="Depth (cm)"
-            value={depth}
-            onChangeText={setDepth}
-            placeholder="0"
-            keyboardType="decimal-pad"
-          />
-
-          <Field
-            label="Weight (g)"
-            value={weight}
-            onChangeText={setWeight}
-            placeholder="0"
-            keyboardType="decimal-pad"
-          />
-        </Section>
-
-        {/* VIDEOS */}
-
-        <Section title="Product Videos">
-          <Field
-            label="YouTube URL"
-            value={videoUrl}
-            onChangeText={setVideoUrl}
-            placeholder="https://youtube.com/..."
-            autoCapitalize="none"
-          />
-
-          <Pressable style={styles.secondaryButton} onPress={addVideo}>
-            <Text style={styles.secondaryButtonText}>+ Add Video</Text>
-          </Pressable>
-
-          {videoUrls.map((url, index) => (
-            <View key={`${url}-${index}`} style={styles.listItem}>
-              <Text style={styles.listItemUrl} numberOfLines={3}>
-                {url}
-              </Text>
-
-              <Pressable onPress={() => removeVideo(index)}>
-                <Text style={styles.removeText}>Remove</Text>
+              <Pressable
+                style={styles.smallButton}
+                onPress={createCategory}
+                disabled={creatingCategory || !newCategoryName.trim()}
+              >
+                {creatingCategory ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.smallButtonText}>Add</Text>
+                )}
               </Pressable>
             </View>
-          ))}
-        </Section>
 
-        {/* PUBLIC PRODUCT PAGE */}
+            {availableCategories.length > 0 ? (
+              <View style={styles.categoryScrollContainer}>
+                <ScrollView
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator
+                  contentContainerStyle={styles.categoryList}
+                >
+                  {availableCategories.map((category) => {
+                    const selected = categoryIds.includes(category.id);
 
-        <Section title="Public Product Page">
-          <DisplaySwitch
-            label="Price"
-            description="Show the product price"
-            value={displaySettings.price}
-            onValueChange={() => toggleDisplaySetting("price")}
-          />
+                    return (
+                      <Pressable
+                        key={category.id}
+                        style={[
+                          styles.categoryItem,
+                          selected && styles.categoryItemSelected,
+                        ]}
+                        onPress={() => toggleCategory(category.id)}
+                      >
+                        <View
+                          style={[
+                            styles.checkbox,
+                            selected && styles.checkboxSelected,
+                          ]}
+                        >
+                          {selected ? (
+                            <Text style={styles.checkmark}>✓</Text>
+                          ) : null}
+                        </View>
 
-          <DisplaySwitch
-            label="Size"
-            description="Show the size field"
-            value={displaySettings.size}
-            onValueChange={() => toggleDisplaySetting("size")}
-          />
+                        <Text style={styles.categoryName}>{category.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : (
+              <Text style={styles.helper}>No categories yet.</Text>
+            )}
+          </Section>
 
-          <DisplaySwitch
-            label="Description"
-            description="Show the product description"
-            value={displaySettings.description}
-            onValueChange={() => toggleDisplaySetting("description")}
-          />
+          {/* PRICING */}
 
-          <DisplaySwitch
-            label="Stock"
-            description="Show available stock"
-            value={displaySettings.stock}
-            onValueChange={() => toggleDisplaySetting("stock")}
-          />
+          <Section title="Pricing & Inventory">
+            <Field
+              label="Price (CHF)"
+              value={price}
+              onChangeText={setPrice}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+            />
 
-          <DisplaySwitch
-            label="Dimensions"
-            description="Show height, width and depth"
-            value={displaySettings.dimensions}
-            onValueChange={() => toggleDisplaySetting("dimensions")}
-          />
+            <Field
+              label="Sale Price (CHF)"
+              value={salePrice}
+              onChangeText={setSalePrice}
+              placeholder="Optional"
+              keyboardType="decimal-pad"
+            />
 
-          <DisplaySwitch
-            label="Weight"
-            description="Show product weight"
-            value={displaySettings.weight}
-            onValueChange={() => toggleDisplaySetting("weight")}
-          />
+            <Field
+              label="Stock"
+              value={stock}
+              onChangeText={setStock}
+              placeholder="0"
+              keyboardType="number-pad"
+            />
+          </Section>
 
-          <DisplaySwitch
-            label="Videos"
-            description="Show product video links"
-            value={displaySettings.videos}
-            onValueChange={() => toggleDisplaySetting("videos")}
-          />
-        </Section>
+          {/* DIMENSIONS */}
 
-        {/* STATUS */}
+          <Section title="Dimensions & Weight">
+            <Field
+              label="Height (cm)"
+              value={height}
+              onChangeText={setHeight}
+              placeholder="0"
+              keyboardType="decimal-pad"
+            />
 
-        <Section title="Product Status">
-          <DisplaySwitch
-            label="Active Product"
-            description="Active products are visible in the shop."
-            value={active}
-            onValueChange={setActive}
-          />
+            <Field
+              label="Width (cm)"
+              value={width}
+              onChangeText={setWidth}
+              placeholder="0"
+              keyboardType="decimal-pad"
+            />
 
-          <DisplaySwitch
-            label="Available for sale"
-            description="Customers can buy even when stock is 0. Useful for prebooking."
-            value={availableForSale}
-            onValueChange={setAvailableForSale}
-          />
-        </Section>
+            <Field
+              label="Depth (cm)"
+              value={depth}
+              onChangeText={setDepth}
+              placeholder="0"
+              keyboardType="decimal-pad"
+            />
 
-        {/* ACTIONS */}
+            <Field
+              label="Weight (g)"
+              value={weight}
+              onChangeText={setWeight}
+              placeholder="0"
+              keyboardType="decimal-pad"
+            />
+          </Section>
 
-        <View style={styles.actions}>
-          {editing ? (
-            <Pressable
-              style={styles.deleteButton}
-              onPress={confirmDelete}
-              disabled={deleting || saving}
-            >
-              {deleting ? (
-                <ActivityIndicator color="#b42318" />
-              ) : (
-                <Text style={styles.deleteButtonText}>Delete Product</Text>
-              )}
+          {/* VIDEOS */}
+
+          <Section title="Product Videos">
+            <Field
+              label="YouTube URL"
+              value={videoUrl}
+              onChangeText={setVideoUrl}
+              placeholder="https://youtube.com/..."
+              autoCapitalize="none"
+            />
+
+            <Pressable style={styles.secondaryButton} onPress={addVideo}>
+              <Text style={styles.secondaryButtonText}>+ Add Video</Text>
             </Pressable>
-          ) : null}
 
-          <View style={styles.bottomButtons}>
-            <Pressable
-              style={styles.cancelButton}
-              onPress={() => router.replace("/admin/products")}
-              disabled={saving || deleting}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.saveButton}
-              onPress={saveProduct}
-              disabled={saving || deleting}
-            >
-              {saving ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.saveText}>
-                  {editing ? "Save Changes" : "Save Product"}
+            {videoUrls.map((url, index) => (
+              <View key={`${url}-${index}`} style={styles.listItem}>
+                <Text style={styles.listItemUrl} numberOfLines={3}>
+                  {url}
                 </Text>
-              )}
-            </Pressable>
+
+                <Pressable onPress={() => removeVideo(index)}>
+                  <Text style={styles.removeText}>Remove</Text>
+                </Pressable>
+              </View>
+            ))}
+          </Section>
+
+          {/* PUBLIC PRODUCT PAGE */}
+
+          <Section title="Public Product Page">
+            <DisplaySwitch
+              label="Price"
+              description="Show the product price"
+              value={displaySettings.price}
+              onValueChange={() => toggleDisplaySetting("price")}
+            />
+
+            <DisplaySwitch
+              label="Size"
+              description="Show the size field"
+              value={displaySettings.size}
+              onValueChange={() => toggleDisplaySetting("size")}
+            />
+
+            <DisplaySwitch
+              label="Description"
+              description="Show the product description"
+              value={displaySettings.description}
+              onValueChange={() => toggleDisplaySetting("description")}
+            />
+
+            <DisplaySwitch
+              label="Stock"
+              description="Show available stock"
+              value={displaySettings.stock}
+              onValueChange={() => toggleDisplaySetting("stock")}
+            />
+
+            <DisplaySwitch
+              label="Dimensions"
+              description="Show height, width and depth"
+              value={displaySettings.dimensions}
+              onValueChange={() => toggleDisplaySetting("dimensions")}
+            />
+
+            <DisplaySwitch
+              label="Weight"
+              description="Show product weight"
+              value={displaySettings.weight}
+              onValueChange={() => toggleDisplaySetting("weight")}
+            />
+
+            <DisplaySwitch
+              label="Videos"
+              description="Show product video links"
+              value={displaySettings.videos}
+              onValueChange={() => toggleDisplaySetting("videos")}
+            />
+          </Section>
+
+          {/* STATUS */}
+
+          <Section title="Product Status">
+            <DisplaySwitch
+              label="Active Product"
+              description="Active products are visible in the shop."
+              value={active}
+              onValueChange={setActive}
+            />
+
+            <DisplaySwitch
+              label="Available for sale"
+              description="Customers can buy even when stock is 0. Useful for prebooking."
+              value={availableForSale}
+              onValueChange={setAvailableForSale}
+            />
+          </Section>
+
+          {/* ACTIONS */}
+
+          <View style={styles.actions}>
+            {editing ? (
+              <Pressable
+                style={styles.deleteButton}
+                onPress={confirmDelete}
+                disabled={deleting || saving}
+              >
+                {deleting ? (
+                  <ActivityIndicator color="#b42318" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Delete Product</Text>
+                )}
+              </Pressable>
+            ) : null}
+
+            <View style={styles.bottomButtons}>
+              <Pressable
+                style={styles.cancelButton}
+                onPress={() => router.replace("/admin/products")}
+                disabled={saving || deleting}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.saveButton}
+                onPress={saveProduct}
+                disabled={saving || deleting}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.saveText}>
+                    {editing ? "Save Changes" : "Save Product"}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -1360,6 +1359,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: STORE.colors.background,
+  },
+
+  keyboardAvoiding: {
+    flex: 1,
   },
 
   content: {

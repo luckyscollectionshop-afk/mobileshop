@@ -3,16 +3,18 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -740,183 +742,189 @@ export default function EditCategoryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* HEADER */}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* HEADER */}
 
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.replace("/admin/categories")}
-            style={styles.backButton}
-          >
-            <Text style={styles.backText}>‹ Categories</Text>
-          </Pressable>
-
-          <Text style={styles.title}>Edit Category</Text>
-
-          <Text style={styles.subtitle}>
-            Update category details and shop appearance.
-          </Text>
-        </View>
-
-        {/* CATEGORY DETAILS */}
-
-        <Section title="Category Details">
-          <Field
-            label="Category Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Jewellery"
-          />
-
-          <Field
-            label="Slug"
-            value={slug}
-            onChangeText={setSlug}
-            placeholder="e.g. jewellery"
-            autoCapitalize="none"
-          />
-
-          <Text style={styles.helper}>Used in the category URL.</Text>
-
-          <Field
-            label="Description"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Describe this category..."
-            multiline
-          />
-
-          <Field
-            label="Sort Order"
-            value={sortOrder}
-            onChangeText={setSortOrder}
-            placeholder="0"
-            keyboardType="number-pad"
-          />
-
-          <Text style={styles.helper}>Lower numbers appear first.</Text>
-        </Section>
-
-        {/* STATUS */}
-
-        <Section title="Category Status">
-          <DisplaySwitch
-            label="Active Category"
-            description="Active categories are visible in the shop."
-            value={isActive}
-            onValueChange={setIsActive}
-          />
-        </Section>
-
-        {/* IMAGE */}
-
-        <Section title="Category Image">
-          {imagePreview ? (
-            <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: imagePreview }}
-                style={styles.categoryImage}
-                resizeMode="cover"
-              />
-            </View>
-          ) : (
-            <View style={styles.noImage}>
-              <Text style={styles.noImageText}>No category image</Text>
-            </View>
-          )}
-
-          <View style={styles.imageButtons}>
+          <View style={styles.header}>
             <Pressable
-              style={styles.secondaryButton}
-              onPress={pickAndUploadImage}
-              disabled={
-                uploading ||
-                saving ||
-                deleting ||
-                deletingImage ||
-                !!imagePreview
-              }
+              onPress={() => router.replace("/admin/categories")}
+              style={styles.backButton}
             >
-              {uploading ? (
-                <ActivityIndicator color={STORE.colors.primary} size="small" />
-              ) : (
-                <Text
-                  style={[
-                    styles.secondaryButtonText,
-                    imagePreview && { color: "#aaa49a" },
-                  ]}
-                >
-                  Choose Image
-                </Text>
-              )}
+              <Text style={styles.backText}>‹ Categories</Text>
             </Pressable>
 
+            <Text style={styles.title}>Edit Category</Text>
+
+            <Text style={styles.subtitle}>
+              Update category details and shop appearance.
+            </Text>
+          </View>
+
+          {/* CATEGORY DETAILS */}
+
+          <Section title="Category Details">
+            <Field
+              label="Category Name"
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Jewellery"
+            />
+
+            <Field
+              label="Slug"
+              value={slug}
+              onChangeText={setSlug}
+              placeholder="e.g. jewellery"
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.helper}>Used in the category URL.</Text>
+
+            <Field
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe this category..."
+              multiline
+            />
+
+            <Field
+              label="Sort Order"
+              value={sortOrder}
+              onChangeText={setSortOrder}
+              placeholder="0"
+              keyboardType="number-pad"
+            />
+
+            <Text style={styles.helper}>Lower numbers appear first.</Text>
+          </Section>
+
+          {/* STATUS */}
+
+          <Section title="Category Status">
+            <DisplaySwitch
+              label="Active Category"
+              description="Active categories are visible in the shop."
+              value={isActive}
+              onValueChange={setIsActive}
+            />
+          </Section>
+
+          {/* IMAGE */}
+
+          <Section title="Category Image">
             {imagePreview ? (
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: imagePreview }}
+                  style={styles.categoryImage}
+                  resizeMode="cover"
+                />
+              </View>
+            ) : (
+              <View style={styles.noImage}>
+                <Text style={styles.noImageText}>No category image</Text>
+              </View>
+            )}
+
+            <View style={styles.imageButtons}>
               <Pressable
-                style={styles.removeImageButton}
-                onPress={removeImage}
-                disabled={uploading || saving || deleting || deletingImage}
+                style={styles.secondaryButton}
+                onPress={pickAndUploadImage}
+                disabled={
+                  uploading ||
+                  saving ||
+                  deleting ||
+                  deletingImage ||
+                  !!imagePreview
+                }
               >
-                {deletingImage ? (
-                  <ActivityIndicator color="#b42318" size="small" />
+                {uploading ? (
+                  <ActivityIndicator
+                    color={STORE.colors.primary}
+                    size="small"
+                  />
                 ) : (
-                  <Text style={styles.removeImageText}>Remove</Text>
+                  <Text
+                    style={[
+                      styles.secondaryButtonText,
+                      imagePreview && { color: "#aaa49a" },
+                    ]}
+                  >
+                    Choose Image
+                  </Text>
                 )}
               </Pressable>
+
+              {imagePreview ? (
+                <Pressable
+                  style={styles.removeImageButton}
+                  onPress={removeImage}
+                  disabled={uploading || saving || deleting || deletingImage}
+                >
+                  {deletingImage ? (
+                    <ActivityIndicator color="#b42318" size="small" />
+                  ) : (
+                    <Text style={styles.removeImageText}>Remove</Text>
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
+
+            <Text style={styles.helper}>Choose an image Max 4.5 MB.</Text>
+
+            {imageFile ? (
+              <Text style={styles.uploadedText}>New image uploaded ✓</Text>
             ) : null}
-          </View>
+          </Section>
 
-          <Text style={styles.helper}>
-            Choose an image Max 4.5 MB.
-          </Text>
+          {/* ACTIONS */}
 
-          {imageFile ? (
-            <Text style={styles.uploadedText}>New image uploaded ✓</Text>
-          ) : null}
-        </Section>
-
-        {/* ACTIONS */}
-
-        <View style={styles.actions}>
-          <Pressable
-            style={styles.deleteButton}
-            onPress={confirmDelete}
-            disabled={deleting || saving || uploading || deletingImage}
-          >
-            {deleting ? (
-              <ActivityIndicator color="#b42318" />
-            ) : (
-              <Text style={styles.deleteButtonText}>Delete Category</Text>
-            )}
-          </Pressable>
-
-          <View style={styles.bottomButtons}>
+          <View style={styles.actions}>
             <Pressable
-              style={styles.cancelButton}
-              onPress={() => router.replace("/admin/categories")}
-              disabled={saving || deleting || uploading || deletingImage}
+              style={styles.deleteButton}
+              onPress={confirmDelete}
+              disabled={deleting || saving || uploading || deletingImage}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.saveButton}
-              onPress={saveCategory}
-              disabled={saving || deleting || uploading || deletingImage}
-            >
-              {saving ? (
-                <ActivityIndicator color="#ffffff" />
+              {deleting ? (
+                <ActivityIndicator color="#b42318" />
               ) : (
-                <Text style={styles.saveText}>Save Changes</Text>
+                <Text style={styles.deleteButtonText}>Delete Category</Text>
               )}
             </Pressable>
+
+            <View style={styles.bottomButtons}>
+              <Pressable
+                style={styles.cancelButton}
+                onPress={() => router.replace("/admin/categories")}
+                disabled={saving || deleting || uploading || deletingImage}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.saveButton}
+                onPress={saveCategory}
+                disabled={saving || deleting || uploading || deletingImage}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.saveText}>Save Changes</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -1016,6 +1024,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: STORE.colors.background,
+  },
+
+  keyboardAvoiding: {
+    flex: 1,
   },
 
   content: {

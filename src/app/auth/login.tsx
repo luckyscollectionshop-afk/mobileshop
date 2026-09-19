@@ -114,8 +114,8 @@ async function handleGoogleLogin() {
         },
       });
 
-    console.log("ACTUAL REDIRECT TO:", redirectTo);
-    console.log("SUPABASE OAUTH URL:", data?.url);
+   // console.log("ACTUAL REDIRECT TO:", redirectTo);
+    //console.log("SUPABASE OAUTH URL:", data?.url);
 
     if (oauthError) {
       throw oauthError;
@@ -131,7 +131,7 @@ async function handleGoogleLogin() {
         redirectTo,
       );
 
-    console.log("OAuth browser result:", result);
+   // console.log("OAuth browser result:", result);
 
     if (result.type !== "success" || !result.url) {
       if (result.type === "cancel") {
@@ -143,10 +143,7 @@ async function handleGoogleLogin() {
 
     const callbackUrl = result.url;
 
-    console.log(
-      "Google OAuth callback URL:",
-      callbackUrl,
-    );
+    //console.log(      "Google OAuth callback URL:",      callbackUrl,    );
 
     /*
      * -------------------------------------------------------
@@ -170,9 +167,7 @@ async function handleGoogleLogin() {
       );
     }
 
-    console.log(
-      "Google OAuth code received. Exchanging for session...",
-    );
+    //console.log(      "Google OAuth code received. Exchanging for session...",    );
 
     const {
       data: sessionData,
@@ -190,9 +185,7 @@ async function handleGoogleLogin() {
       );
     }
 
-    console.log(
-      "Google session established successfully.",
-    );
+    //console.log(      "Google session established successfully.",    );
 
     setSuccess("Login successful.");
 

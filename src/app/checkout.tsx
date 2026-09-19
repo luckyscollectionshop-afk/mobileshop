@@ -1,7 +1,11 @@
+import { Image } from "expo-image";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,12 +13,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
 
-import { supabase } from "@/lib/supabase";
 import { STORE } from "@/constants/store";
+import { supabase } from "@/lib/supabase";
 
 /* =========================================================
    TYPES
@@ -767,356 +769,364 @@ export default function CheckoutScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.container}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* ===================================================
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ===================================================
             PAGE TITLE
            =================================================== */}
 
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </Pressable>
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()}>
+              <Text style={styles.backText}>← Back</Text>
+            </Pressable>
 
-          <Text style={styles.title}>Checkout</Text>
+            <Text style={styles.title}>Checkout</Text>
 
-          <View style={styles.headerSpacer} />
-        </View>
+            <View style={styles.headerSpacer} />
+          </View>
 
-        {/* ===================================================
+          {/* ===================================================
             SHIPPING ADDRESS
            =================================================== */}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>1. Shipping address</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>1. Shipping address</Text>
 
-          <View style={styles.addressCard}>
-            <Text style={styles.addressHint}>
-              Your current delivery details are shown below. You can edit them
-              if needed.
-            </Text>
+            <View style={styles.addressCard}>
+              <Text style={styles.addressHint}>
+                Your current delivery details are shown below. You can edit them
+                if needed.
+              </Text>
 
-            <TextInput
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Full name"
-              placeholderTextColor="#999"
-              style={styles.input}
-            />
-
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Phone"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-              style={styles.input}
-            />
-
-            <TextInput
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Address"
-              placeholderTextColor="#999"
-              style={styles.input}
-            />
-
-            <View style={styles.inputRow}>
               <TextInput
-                value={postalCode}
-                onChangeText={setPostalCode}
-                placeholder="Postal code"
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="Full name"
                 placeholderTextColor="#999"
-                keyboardType="number-pad"
-                style={[styles.input, styles.postalInput]}
+                style={styles.input}
               />
 
               <TextInput
-                value={city}
-                onChangeText={setCity}
-                placeholder="City"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Phone"
                 placeholderTextColor="#999"
-                style={[styles.input, styles.cityInput]}
+                keyboardType="phone-pad"
+                style={styles.input}
               />
+
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Address"
+                placeholderTextColor="#999"
+                style={styles.input}
+              />
+
+              <View style={styles.inputRow}>
+                <TextInput
+                  value={postalCode}
+                  onChangeText={setPostalCode}
+                  placeholder="Postal code"
+                  placeholderTextColor="#999"
+                  keyboardType="number-pad"
+                  style={[styles.input, styles.postalInput]}
+                />
+
+                <TextInput
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder="City"
+                  placeholderTextColor="#999"
+                  style={[styles.input, styles.cityInput]}
+                />
+              </View>
+
+              <TextInput
+                value={country}
+                onChangeText={setCountry}
+                placeholder="Country"
+                placeholderTextColor="#999"
+                style={styles.input}
+              />
+
+              <Text style={styles.profileNote}>
+                Changes made here will update your saved account details.
+              </Text>
             </View>
-
-            <TextInput
-              value={country}
-              onChangeText={setCountry}
-              placeholder="Country"
-              placeholderTextColor="#999"
-              style={styles.input}
-            />
-
-            <Text style={styles.profileNote}>
-              Changes made here will update your saved account details.
-            </Text>
           </View>
-        </View>
 
-        {/* ===================================================
+          {/* ===================================================
             PAYMENT
            =================================================== */}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. Payment method</Text>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>2. Payment method</Text>
 
-          {!hasPaymentMethod ? (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>
-                No payment method is currently available.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.paymentList}>
-              {settings?.twint_enabled && (
-                <Pressable
-                  onPress={() => setPaymentMethod("twint")}
-                  style={[
-                    styles.paymentCard,
-                    paymentMethod === "twint" && styles.paymentCardSelected,
-                  ]}
-                >
-                  <View style={styles.paymentRadio}>
-                    {paymentMethod === "twint" && (
-                      <View style={styles.paymentDot} />
-                    )}
-                  </View>
+            {!hasPaymentMethod ? (
+              <View style={styles.warningBox}>
+                <Text style={styles.warningText}>
+                  No payment method is currently available.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.paymentList}>
+                {settings?.twint_enabled && (
+                  <Pressable
+                    onPress={() => setPaymentMethod("twint")}
+                    style={[
+                      styles.paymentCard,
+                      paymentMethod === "twint" && styles.paymentCardSelected,
+                    ]}
+                  >
+                    <View style={styles.paymentRadio}>
+                      {paymentMethod === "twint" && (
+                        <View style={styles.paymentDot} />
+                      )}
+                    </View>
 
-                  <View style={styles.paymentContent}>
-                    <Text style={styles.paymentTitle}>TWINT</Text>
+                    <View style={styles.paymentContent}>
+                      <Text style={styles.paymentTitle}>TWINT</Text>
 
-                    <Text style={styles.paymentDescription}>
-                      Pay using TWINT
-                    </Text>
-
-                    {settings.twint_phone && (
-                      <Text style={styles.paymentInfo}>
-                        {settings.twint_phone}
+                      <Text style={styles.paymentDescription}>
+                        Pay using TWINT
                       </Text>
-                    )}
-                  </View>
-                </Pressable>
-              )}
 
-              {settings?.bank_transfer_enabled && (
-                <Pressable
-                  onPress={() => setPaymentMethod("bank_transfer")}
-                  style={[
-                    styles.paymentCard,
-                    paymentMethod === "bank_transfer" &&
-                      styles.paymentCardSelected,
-                  ]}
-                >
-                  <View style={styles.paymentRadio}>
-                    {paymentMethod === "bank_transfer" && (
-                      <View style={styles.paymentDot} />
-                    )}
-                  </View>
+                      {settings.twint_phone && (
+                        <Text style={styles.paymentInfo}>
+                          {settings.twint_phone}
+                        </Text>
+                      )}
+                    </View>
+                  </Pressable>
+                )}
 
-                  <View style={styles.paymentContent}>
-                    <Text style={styles.paymentTitle}>Bank transfer</Text>
+                {settings?.bank_transfer_enabled && (
+                  <Pressable
+                    onPress={() => setPaymentMethod("bank_transfer")}
+                    style={[
+                      styles.paymentCard,
+                      paymentMethod === "bank_transfer" &&
+                        styles.paymentCardSelected,
+                    ]}
+                  >
+                    <View style={styles.paymentRadio}>
+                      {paymentMethod === "bank_transfer" && (
+                        <View style={styles.paymentDot} />
+                      )}
+                    </View>
 
-                    <Text style={styles.paymentDescription}>
-                      Pay by bank transfer
-                    </Text>
+                    <View style={styles.paymentContent}>
+                      <Text style={styles.paymentTitle}>Bank transfer</Text>
 
-                    {settings.bank_account_name && (
-                      <Text style={styles.paymentInfo}>
-                        {settings.bank_account_name}
+                      <Text style={styles.paymentDescription}>
+                        Pay by bank transfer
                       </Text>
-                    )}
 
-                    {settings.bank_iban && (
-                      <Text style={styles.paymentInfo}>
-                        {settings.bank_iban}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              )}
-            </View>
-          )}
-        </View>
+                      {settings.bank_account_name && (
+                        <Text style={styles.paymentInfo}>
+                          {settings.bank_account_name}
+                        </Text>
+                      )}
 
-        {/* ===================================================
-            SHIPPING
-           =================================================== */}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>3. Shipping</Text>
-
-          {!settings?.shipping_enabled ? (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>Shipping is not enabled.</Text>
-            </View>
-          ) : settings.free_shipping ? (
-            <View style={styles.shippingCard}>
-              <View>
-                <Text style={styles.shippingTitle}>
-                  {settings.shipping_method || "Shipping"}
-                </Text>
-
-                <Text style={styles.shippingDescription}>Free shipping</Text>
-              </View>
-
-              <Text style={styles.shippingPrice}>FREE</Text>
-            </View>
-          ) : (
-            <View style={styles.shippingCard}>
-              <View>
-                <Text style={styles.shippingTitle}>
-                  {settings.shipping_method || "Shipping"}
-                </Text>
-
-                <Text style={styles.shippingDescription}>Shipping fee</Text>
-              </View>
-
-              {!catalogMode && (
-                <Text style={styles.shippingPrice}>
-                  CHF {shippingCost.toFixed(2)}
-                </Text>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* ===================================================
-            ORDER SUMMARY
-           =================================================== */}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>4. Order summary</Text>
-
-          <View style={styles.summaryCard}>
-            {items.map((item) => {
-              const price =
-                item.product.sale_price !== null
-                  ? item.product.sale_price
-                  : item.product.price;
-
-              const lineTotal = price * item.quantity;
-
-              const image = item.product.images?.[0] ?? null;
-
-              return (
-                <View key={item.id} style={styles.summaryItem}>
-                  <View style={styles.summaryImageContainer}>
-                    {image ? (
-                      <Image
-                        source={{
-                          uri: image,
-                        }}
-                        style={styles.summaryImage}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={styles.noImage}>
-                        <Text style={styles.noImageText}>—</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <View style={styles.summaryItemInfo}>
-                    <Text style={styles.summaryItemName} numberOfLines={2}>
-                      {item.product.name}
-                    </Text>
-
-                    <Text style={styles.summaryItemQuantity}>
-                      Qty: {item.quantity}
-                    </Text>
-                  </View>
-
-                  {!catalogMode && (
-                    <Text style={styles.summaryItemPrice}>
-                      CHF {lineTotal.toFixed(2)}
-                    </Text>
-                  )}
-                </View>
-              );
-            })}
-
-            <View style={styles.divider} />
-
-            {!catalogMode && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Subtotal</Text>
-
-                <Text style={styles.totalValue}>CHF {subtotal.toFixed(2)}</Text>
-              </View>
-            )}
-
-            {!catalogMode && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Shipping</Text>
-
-                <Text style={styles.totalValue}>
-                  {shippingCost === 0
-                    ? "FREE"
-                    : `CHF ${shippingCost.toFixed(2)}`}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.divider} />
-
-            {!catalogMode && (
-              <View style={styles.grandTotalRow}>
-                <Text style={styles.grandTotalLabel}>Total</Text>
-
-                <Text style={styles.grandTotalValue}>
-                  CHF {total.toFixed(2)}
-                </Text>
+                      {settings.bank_iban && (
+                        <Text style={styles.paymentInfo}>
+                          {settings.bank_iban}
+                        </Text>
+                      )}
+                    </View>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
-        </View>
 
-        {catalogMode && (
-  <View style={styles.catalogNote}>
-    <Text style={styles.catalogNoteText}>
-      This shop is currently in catalog mode. Prices will be
-      confirmed by the shop after your order is received.
-    </Text>
-  </View>
-)}
+          {/* ===================================================
+            SHIPPING
+           =================================================== */}
 
-        {/* ===================================================
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>3. Shipping</Text>
+
+            {!settings?.shipping_enabled ? (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>Shipping is not enabled.</Text>
+              </View>
+            ) : settings.free_shipping ? (
+              <View style={styles.shippingCard}>
+                <View>
+                  <Text style={styles.shippingTitle}>
+                    {settings.shipping_method || "Shipping"}
+                  </Text>
+
+                  <Text style={styles.shippingDescription}>Free shipping</Text>
+                </View>
+
+                <Text style={styles.shippingPrice}>FREE</Text>
+              </View>
+            ) : (
+              <View style={styles.shippingCard}>
+                <View>
+                  <Text style={styles.shippingTitle}>
+                    {settings.shipping_method || "Shipping"}
+                  </Text>
+
+                  <Text style={styles.shippingDescription}>Shipping fee</Text>
+                </View>
+
+                {!catalogMode && (
+                  <Text style={styles.shippingPrice}>
+                    CHF {shippingCost.toFixed(2)}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* ===================================================
+            ORDER SUMMARY
+           =================================================== */}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>4. Order summary</Text>
+
+            <View style={styles.summaryCard}>
+              {items.map((item) => {
+                const price =
+                  item.product.sale_price !== null
+                    ? item.product.sale_price
+                    : item.product.price;
+
+                const lineTotal = price * item.quantity;
+
+                const image = item.product.images?.[0] ?? null;
+
+                return (
+                  <View key={item.id} style={styles.summaryItem}>
+                    <View style={styles.summaryImageContainer}>
+                      {image ? (
+                        <Image
+                          source={{
+                            uri: image,
+                          }}
+                          style={styles.summaryImage}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <View style={styles.noImage}>
+                          <Text style={styles.noImageText}>—</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.summaryItemInfo}>
+                      <Text style={styles.summaryItemName} numberOfLines={2}>
+                        {item.product.name}
+                      </Text>
+
+                      <Text style={styles.summaryItemQuantity}>
+                        Qty: {item.quantity}
+                      </Text>
+                    </View>
+
+                    {!catalogMode && (
+                      <Text style={styles.summaryItemPrice}>
+                        CHF {lineTotal.toFixed(2)}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+
+              <View style={styles.divider} />
+
+              {!catalogMode && (
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Subtotal</Text>
+
+                  <Text style={styles.totalValue}>
+                    CHF {subtotal.toFixed(2)}
+                  </Text>
+                </View>
+              )}
+
+              {!catalogMode && (
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Shipping</Text>
+
+                  <Text style={styles.totalValue}>
+                    {shippingCost === 0
+                      ? "FREE"
+                      : `CHF ${shippingCost.toFixed(2)}`}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.divider} />
+
+              {!catalogMode && (
+                <View style={styles.grandTotalRow}>
+                  <Text style={styles.grandTotalLabel}>Total</Text>
+
+                  <Text style={styles.grandTotalValue}>
+                    CHF {total.toFixed(2)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {catalogMode && (
+            <View style={styles.catalogNote}>
+              <Text style={styles.catalogNoteText}>
+                This shop is currently in catalog mode. Prices will be confirmed
+                by the shop after your order is received.
+              </Text>
+            </View>
+          )}
+
+          {/* ===================================================
             PLACE ORDER
            =================================================== */}
 
-        <Pressable
-          style={[
-            styles.placeOrderButton,
-            (!hasPaymentMethod || !addressComplete || placingOrder) &&
-              styles.placeOrderDisabled,
-          ]}
-          disabled={!hasPaymentMethod || !addressComplete || placingOrder}
-          onPress={placeOrder}
-        >
-          {placingOrder ? (
-            <View style={styles.placeOrderLoading}>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.placeOrderText}>Placing order...</Text>
-            </View>
-          ) : (
-            <Text style={styles.placeOrderText}>Place order</Text>
+          <Pressable
+            style={[
+              styles.placeOrderButton,
+              (!hasPaymentMethod || !addressComplete || placingOrder) &&
+                styles.placeOrderDisabled,
+            ]}
+            disabled={!hasPaymentMethod || !addressComplete || placingOrder}
+            onPress={placeOrder}
+          >
+            {placingOrder ? (
+              <View style={styles.placeOrderLoading}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.placeOrderText}>Placing order...</Text>
+              </View>
+            ) : (
+              <Text style={styles.placeOrderText}>Place order</Text>
+            )}
+          </Pressable>
+
+          {!addressComplete && (
+            <Text style={styles.addressRequiredNote}>
+              Please complete your shipping address before placing the order.
+            </Text>
           )}
-        </Pressable>
 
-        {!addressComplete && (
-          <Text style={styles.addressRequiredNote}>
-            Please complete your shipping address before placing the order.
+          <Text style={styles.secureNote}>
+            Your order will be securely processed through your selected payment
+            method.
           </Text>
-        )}
-
-        <Text style={styles.secureNote}>
-          Your order will be securely processed through your selected payment
-          method.
-        </Text>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -1129,6 +1139,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: STORE.colors.background,
+  },
+
+  keyboardAvoiding: {
+    flex: 1,
   },
 
   center: {
@@ -1454,21 +1468,21 @@ const styles = StyleSheet.create({
   /* =======================================================
      Messages
      ======================================================= */
-catalogNote: {
-  marginTop: 20,
-  padding: 13,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: "#ddd8cf",
-  backgroundColor: "rgba(255,255,255,0.45)",
-},
+  catalogNote: {
+    marginTop: 20,
+    padding: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#ddd8cf",
+    backgroundColor: "rgba(255,255,255,0.45)",
+  },
 
-catalogNoteText: {
-  fontSize: 12,
-  lineHeight: 18,
-  textAlign: "center",
-  color: "#777",
-},
+  catalogNoteText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    color: "#777",
+  },
   warningBox: {
     borderWidth: 1,
     borderColor: "#e3c7c4",
