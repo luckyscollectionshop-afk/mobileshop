@@ -46,6 +46,7 @@ module.exports = {
       "expo-web-browser",
       "expo-notifications",
       "expo-image-picker",
+      "@react-native-community/datetimepicker",
     ],
 
     experiments: {

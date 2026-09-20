@@ -2,6 +2,8 @@ import { notifyNotificationsChanged, supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { CalendarPlus } from "lucide-react-native";
+import AddToCalendarDialog from "@/components/notifications/AddToCalendarDialog";
 import {
   ActivityIndicator,
   Alert,
@@ -24,11 +26,17 @@ type Notification = {
   read_at: string | null;
   created_at: string;
 };
+type OrderInfo = {
+  id: string;
+  order_number: string;
+  created_at: string;
+};
 
 export default function NotificationsScreen() {
   const router = useRouter();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [ordersById, setOrdersById] = useState<Record<string, OrderInfo>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
@@ -57,7 +65,45 @@ export default function NotificationsScreen() {
         return;
       }
 
-      setNotifications(data ?? []);
+      const loadedNotifications = data ?? [];
+
+      setNotifications(loadedNotifications);
+
+      const orderIds = Array.from(
+        new Set(
+          loadedNotifications
+            .filter(
+              (notification) =>
+                notification.type === "admin_order_placed" &&
+                notification.order_id,
+            )
+            .map((notification) => notification.order_id as string),
+        ),
+      );
+
+      if (orderIds.length > 0) {
+        const { data: orders, error: ordersError } = await supabase
+          .from("orders")
+          .select("id, order_number, created_at")
+          .in("id", orderIds);
+
+        if (ordersError) {
+          console.error(
+            "Unable to load notification orders:",
+            ordersError.message,
+          );
+        } else {
+          const orderMap: Record<string, OrderInfo> = {};
+
+          for (const order of orders ?? []) {
+            orderMap[order.id] = order;
+          }
+
+          setOrdersById(orderMap);
+        }
+      } else {
+        setOrdersById({});
+      }
     } catch (error) {
       console.error("Unable to load notifications:", error);
     } finally {
@@ -263,7 +309,8 @@ export default function NotificationsScreen() {
   const renderNotification = ({ item }: { item: Notification }) => {
     const unread = !item.read_at;
     const hasOrder = Boolean(item.order_id);
-
+    const isAdminNewOrder = item.type === "admin_order_placed";
+    const calendarOrder = item.order_id ? ordersById[item.order_id] : undefined;
     return (
       <Pressable
         onPress={() => void handleNotificationPress(item)}
@@ -300,6 +347,13 @@ export default function NotificationsScreen() {
           <Text style={styles.date}>{formatDate(item.created_at)}</Text>
 
           {hasOrder && <Text style={styles.tapHint}>Tap to view order</Text>}
+          {isAdminNewOrder && hasOrder && calendarOrder && (
+            <AddToCalendarDialog
+              orderId={calendarOrder.id}
+              orderNumber={calendarOrder.order_number}
+              orderCreatedAt={calendarOrder.created_at}
+            />
+          )}
         </View>
       </Pressable>
     );
@@ -500,6 +554,25 @@ const styles = StyleSheet.create({
     marginTop: 7,
     fontSize: 12,
     fontWeight: "600",
+    color: "#8B6B35",
+  },
+  calendarButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 7,
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D9C28C",
+    backgroundColor: "#FFF9EA",
+  },
+
+  calendarButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
     color: "#8B6B35",
   },
 
