@@ -280,7 +280,7 @@ export default function AddToCalendarDialog({
                   value={date}
                   mode="date"
                   display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={(_, selectedDate) => updateDate(selectedDate)}
+                  onValueChange={(_, selectedDate) => updateDate(selectedDate)}
                 />
               )}
             </View>
